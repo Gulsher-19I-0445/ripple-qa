@@ -1,0 +1,23 @@
+{
+  "name": "ripple-qa",
+  "version": "0.1.0",
+  "description": "Release impact analyzer for QA engineers",
+  "bin": {
+    "ripple": "./bin/ripple.js"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node bin/ripple.js",
+    "dev": "node --watch bin/ripple.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "csv-parse": "^5.5.6",
+    "dotenv": "^16.4.5",
+    "inquirer": "^10.1.0",
+    "openai": "^6.42.0",
+    "ora": "^8.0.1"
+  }
+}

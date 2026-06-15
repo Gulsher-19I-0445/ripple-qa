@@ -1,0 +1,29 @@
+{
+  "jira": {
+    "url": "https://yourcompany.atlassian.net",
+    "email": "you@company.com",
+    "projectKey": "PROJ"
+  },
+  "confluence": {
+    "url": "https://yourcompany.atlassian.net",
+    "spaceKey": "ENG"
+  },
+  "testSuite": {
+    "type": "csv",
+    "path": "./tests/regression_suite.csv",
+    "columns": {
+      "name": "Test Case Name",
+      "area": "Feature Area",
+      "priority": "Priority"
+    }
+  },
+  "llm": {
+    "provider": "claude",
+    "model": "claude-sonnet-4-6"
+  },
+  "output": {
+    "format": "markdown",
+    "saveReports": false,
+    "reportsDir": "./ripple-reports"
+  }
+}
