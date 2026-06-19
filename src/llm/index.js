@@ -33,5 +33,13 @@ export function createLLM(config) {
     });
   }
 
-  throw new Error(`Unknown LLM provider: ${provider}. Supported: claude, github, openai`);
+  if (provider === 'ollama') {
+    return new OpenAICompatibleLLM({
+      model: model ?? 'llama3.1:8b',
+      baseURL: config.llm?.baseURL ?? 'http://127.0.0.1:11434/v1',
+      apiKeyEnv: config.llm?.apiKeyEnv ?? undefined,
+    });
+  }
+
+  throw new Error(`Unknown LLM provider: ${provider}. Supported: claude, github, openai, ollama`);
 }
