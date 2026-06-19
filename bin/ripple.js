@@ -1,15 +1,21 @@
 #!/usr/bin/env node
 import 'dotenv/config';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import { Command, Option } from 'commander';
 import { runInit } from '../src/commands/init.js';
 import { runAnalyze } from '../src/commands/analyze.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const { version } = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf8'));
 
 const program = new Command();
 
 program
   .name('ripple')
   .description('Release impact analyzer for QA engineers')
-  .version('0.1.0');
+  .version(version);
 
 program
   .command('init')
