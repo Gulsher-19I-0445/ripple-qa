@@ -77,6 +77,7 @@ export async function runInit() {
       { name: 'Claude (Anthropic) — default', value: 'claude' },
       { name: 'GitHub Models (use your GitHub token)', value: 'github' },
       { name: 'OpenAI / other OpenAI-compatible API', value: 'openai' },
+      { name: 'Ollama (local, no API key required)', value: 'ollama' },
     ],
   });
 
@@ -119,6 +120,17 @@ export async function runInit() {
     });
   }
 
+  if (llmProvider === 'ollama') {
+    llmModel = await input({
+      message: 'Ollama model (e.g. llama3.1:8b, mistral, gemma2):',
+      default: 'llama3.1:8b',
+    });
+    llmBaseURL = await input({
+      message: 'Ollama API base URL:',
+      default: 'http://127.0.0.1:11434/v1',
+    });
+  }
+
   const outputFormat = await select({
     message: 'Default output format:',
     choices: [
@@ -132,6 +144,7 @@ export async function runInit() {
   const llmConfig = { provider: llmProvider, model: llmModel };
   if (llmBaseURL) llmConfig.baseURL = llmBaseURL;
   if (llmApiKeyEnv && llmApiKeyEnv !== 'OPENAI_API_KEY') llmConfig.apiKeyEnv = llmApiKeyEnv;
+  if (llmProvider === 'ollama' && !llmConfig.baseURL) llmConfig.baseURL = 'http://127.0.0.1:11434/v1';
 
   const config = {
     jira: {
@@ -185,11 +198,17 @@ export async function runInit() {
   }
 
   console.log(chalk.cyan('\nNext steps:'));
-  console.log('  1. Copy .env.example to .env and fill in your API keys');
-  if (llmProvider === 'github') {
-    console.log(chalk.gray('     GITHUB_TOKEN — create at github.com/settings/tokens (read:user scope is enough)'));
+  if (llmProvider === 'ollama') {
+    console.log('  1. Make sure Ollama is running: ' + chalk.white('ollama serve'));
+    console.log('     Pull your model if needed:   ' + chalk.white(`ollama pull ${llmModel ?? 'llama3.1:8b'}`));
+    console.log('  2. Copy .env.example to .env and fill in your Jira/Confluence tokens');
+  } else {
+    console.log('  1. Copy .env.example to .env and fill in your API keys');
+    if (llmProvider === 'github') {
+      console.log(chalk.gray('     GITHUB_TOKEN — create at github.com/settings/tokens (read:user scope is enough)'));
+    }
   }
-  console.log('  2. Run: ' + chalk.white(`ripple analyze --ticket ${projectKey.trim().toUpperCase()}-1234`));
+  console.log('  ' + (llmProvider === 'ollama' ? '3' : '2') + '. Run: ' + chalk.white(`ripple analyze --ticket ${projectKey.trim().toUpperCase()}-1234`));
   console.log('');
 }
 
@@ -202,6 +221,9 @@ function buildEnvExample(provider, customKeyEnv) {
   }
   if (provider === 'github') {
     return `GITHUB_TOKEN=github_pat_...\n${jiraLine}${confluenceLine}`;
+  }
+  if (provider === 'ollama') {
+    return `# No LLM API key required for Ollama — it runs locally\n${jiraLine}${confluenceLine}`;
   }
   // openai / custom
   const keyEnv = customKeyEnv || 'OPENAI_API_KEY';
