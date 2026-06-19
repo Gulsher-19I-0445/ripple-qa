@@ -125,8 +125,10 @@ All non-secret configuration lives in `ripple.config.json` (safe to commit).
 | `testSuite.columns.name` | CSV column header for the test case name |
 | `testSuite.columns.area` | CSV column header for the feature area |
 | `testSuite.columns.priority` | CSV column header for the priority (High/Medium/Low) |
-| `llm.provider` | LLM provider — currently only `claude` |
-| `llm.model` | Claude model ID — default: `claude-sonnet-4-6` |
+| `llm.provider` | LLM provider: `claude` (default), `github`, `openai`, `ollama` |
+| `llm.model` | Model ID — default depends on provider (e.g. `claude-sonnet-4-6`, `llama3.1:8b`) |
+| `llm.baseURL` | API base URL — required for `ollama`, optional for `openai` |
+| `llm.apiKeyEnv` | Env variable name holding the API key — not used for `ollama` |
 | `output.format` | Default output format: `markdown`, `json`, or `both` |
 | `output.saveReports` | If `true`, always saves reports without needing `--save` |
 | `output.reportsDir` | Directory to write saved reports — default: `./ripple-reports` |
@@ -157,6 +159,72 @@ Store API keys in a `.env` file (never commit this file).
 | TestRail | | ✅ |
 | Zephyr Scale | | ✅ |
 | GitHub Issues | | ✅ |
+
+## Supported LLM Providers
+
+| Provider | Notes |
+|----------|-------|
+| Claude (Anthropic) | Default — set `ANTHROPIC_API_KEY` |
+| GitHub Models | Uses your GitHub token — set `GITHUB_TOKEN` |
+| OpenAI / compatible | Set `OPENAI_API_KEY` (or custom env) |
+| Ollama | Local, no API key — see [Using Ollama](#using-ollama-local-models) |
+
+---
+
+## Using Ollama (Local Models)
+
+Ripple supports [Ollama](https://ollama.com) as a fully local, no-cost LLM option — no API key required.
+
+**1. Install and start Ollama**
+
+```bash
+# macOS / Linux
+brew install ollama   # or download from ollama.com
+ollama serve
+```
+
+**2. Pull a model**
+
+```bash
+ollama pull llama3.1:8b      # recommended — strong reasoning, fast
+ollama pull mistral           # good alternative
+ollama pull gemma2:9b         # Google's Gemma 2
+```
+
+**3. Run `ripple init` and choose Ollama**
+
+```
+? LLM provider: Ollama (local, no API key required)
+? Ollama model: llama3.1:8b
+? Ollama API base URL: http://127.0.0.1:11434/v1
+```
+
+This writes the following to `ripple.config.json`:
+
+```json
+{
+  "llm": {
+    "provider": "ollama",
+    "model": "llama3.1:8b",
+    "baseURL": "http://127.0.0.1:11434/v1"
+  }
+}
+```
+
+**4. Add only Jira/Confluence tokens to `.env`** — no LLM key needed:
+
+```
+JIRA_API_TOKEN=...
+CONFLUENCE_API_TOKEN=...
+```
+
+**5. Analyze as usual**
+
+```bash
+ripple analyze --ticket PROJ-1234
+```
+
+> **Note:** Local model quality varies. `llama3.1:8b` works well for structured JSON output. If you get JSON parse errors, try a larger model (`llama3.1:70b`) or set `"model": "mistral"` in `ripple.config.json`.
 
 ---
 
