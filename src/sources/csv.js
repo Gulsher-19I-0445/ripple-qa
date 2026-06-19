@@ -1,10 +1,15 @@
 import { readFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
+import { resolve, sep } from 'path';
 import { parse } from 'csv-parse/sync';
 import chalk from 'chalk';
 
 export function loadTestSuite(config) {
-  const csvPath = resolve(process.cwd(), config.testSuite.path);
+  const projectRoot = process.cwd();
+  const csvPath = resolve(projectRoot, config.testSuite.path);
+
+  if (!csvPath.startsWith(projectRoot + sep) && csvPath !== projectRoot) {
+    throw new Error(`testSuite.path must be inside the project directory, got: ${config.testSuite.path}`);
+  }
 
   if (!existsSync(csvPath)) {
     throw new Error(`Test suite CSV not found at ${config.testSuite.path}. Check testSuite.path in config.`);

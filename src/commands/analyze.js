@@ -208,7 +208,8 @@ async function fetchSources(ticketKey, config, testSuite, options) {
         try {
           return await fetchPageById(match[1], link.title || `Page ${match[1]}`, link.url, config);
         } catch (err) {
-          spinner.warn(chalk.yellow(`Could not fetch linked page "${link.title}" (ID ${match[1]}): ${err.message}`));
+          const safeMsg = err.message?.replace(/https?:\/\/[^\s]+/g, '[url]').slice(0, 120);
+          spinner.warn(chalk.yellow(`Could not fetch linked page "${link.title}" (ID ${match[1]}): ${safeMsg}`));
           return null;
         }
       })
@@ -432,6 +433,10 @@ export async function runAnalyze(options) {
   }
 
   if (options.release) {
+    if (options.release.length > 255) {
+      console.error(chalk.red('--release value is too long (max 255 characters).'));
+      process.exit(1);
+    }
     const releaseSpinner = ora(`Fetching tickets for release ${options.release}...`).start();
     let ticketKeys;
     try {

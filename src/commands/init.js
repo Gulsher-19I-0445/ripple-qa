@@ -17,7 +17,7 @@ export async function runInit() {
 
   const jiraUrl = await input({
     message: 'Jira URL (e.g. https://yourcompany.atlassian.net):',
-    validate: v => v.startsWith('http') || 'Please enter a valid URL',
+    validate: v => v.startsWith('https://') || 'Please enter a URL starting with https://',
   });
 
   const jiraEmail = await input({
@@ -40,7 +40,7 @@ export async function runInit() {
     ? jiraUrl
     : await input({
         message: 'Confluence URL:',
-        validate: v => v.startsWith('http') || 'Please enter a valid URL',
+        validate: v => v.startsWith('https://') || 'Please enter a URL starting with https://',
       });
 
   const spaceKey = await input({
@@ -117,6 +117,7 @@ export async function runInit() {
     llmApiKeyEnv = await input({
       message: 'Name of the env variable holding your API key:',
       default: 'OPENAI_API_KEY',
+      validate: v => /^[A-Z_][A-Z0-9_]*$/i.test(v) || 'Use only letters, digits, and underscores',
     });
   }
 

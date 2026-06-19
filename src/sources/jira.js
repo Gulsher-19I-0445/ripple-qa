@@ -123,7 +123,8 @@ export async function fetchRemoteLinks(ticketKey, config) {
 }
 
 export async function fetchReleaseTickets(versionName, config) {
-  const jql = `project="${config.jira.projectKey}" AND fixVersion="${versionName}"`;
+  const safeVersion = versionName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const jql = `project="${config.jira.projectKey}" AND fixVersion="${safeVersion}"`;
   const baseUrl = `${config.jira.url}/rest/api/3/search`;
   const keys = [];
   let startAt = 0;

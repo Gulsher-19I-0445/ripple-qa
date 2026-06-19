@@ -43,7 +43,8 @@ async function confluenceFetch(url, config) {
 }
 
 async function searchPages(query, config) {
-  const cql = `space="${config.confluence.spaceKey}" AND text~"${query}"`;
+  const safeQuery = query.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const cql = `space="${config.confluence.spaceKey}" AND text~"${safeQuery}"`;
   const url = `${config.confluence.url}/wiki/rest/api/content/search?cql=${encodeURIComponent(cql)}&limit=5&expand=excerpt`;
 
   try {
