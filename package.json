@@ -1,6 +1,6 @@
 {
   "name": "ripple-qa",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Release impact analyzer for QA engineers — cross-references Jira tickets with Confluence docs and your test suite to produce a structured test impact report",
   "author": "Gulsher Khan <gulsherkhan962@gmail.com>",
   "license": "MIT",
