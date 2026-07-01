@@ -9,6 +9,7 @@ import { loadTestSuite } from '../sources/csv.js';
 import { createLLM } from '../llm/index.js';
 import { formatMarkdown } from '../output/markdown.js';
 import { formatJson } from '../output/json.js';
+import { warnOnSecrets } from '../utils/scrub.js';
 
 const SYSTEM_PROMPT = `You are Ripple, a QA impact analysis engine. Your job is to analyze a Jira ticket and determine the testing impact.
 
@@ -231,7 +232,14 @@ async function analyzeTicket(ticketKey, config, testSuite, llm, options) {
     return { __sourceDump: true, ticket, wikiPages, testSuite };
   }
 
+  warnOnSecrets(ticket.description, 'ticket description');
+  warnOnSecrets(ticket.acceptanceCriteria, 'acceptance criteria');
+  for (const page of wikiPages) {
+    warnOnSecrets(page.content, `wiki page "${page.title}"`);
+  }
+
   if (options.verbose) {
+    console.warn(chalk.yellow('Warning: verbose output may contain sensitive data — do not use in shared/CI environments.'));
     console.log(chalk.cyan('\n--- VERBOSE: Ticket ---'));
     console.log(JSON.stringify(ticket, null, 2));
     console.log(chalk.cyan('\n--- VERBOSE: Wiki Pages ---'));

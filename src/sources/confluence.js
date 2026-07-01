@@ -1,3 +1,5 @@
+import { validateHttpsUrl } from '../utils/validate-url.js';
+
 function stripHtml(html) {
   return html
     .replace(/<[^>]+>/g, ' ')
@@ -69,12 +71,14 @@ async function fetchPageContent(pageId, config) {
 }
 
 export async function fetchPageById(pageId, pageTitle, pageUrl, config) {
+  validateHttpsUrl(config.confluence.url, 'Confluence');
   const content = await fetchPageContent(pageId, config);
   if (!content) return null;
   return { title: pageTitle, content, url: pageUrl };
 }
 
 export async function findRelatedPages(ticketContext, config) {
+  validateHttpsUrl(config.confluence.url, 'Confluence');
   const { summary, components, labels } = ticketContext;
 
   const queries = new Set();
