@@ -28,6 +28,7 @@ export function loadTestSuite(config) {
   const colName = config.testSuite.columns?.name ?? 'Test Case Name';
   const colArea = config.testSuite.columns?.area ?? 'Feature Area';
   const colPriority = config.testSuite.columns?.priority ?? 'Priority';
+  const colDescription = config.testSuite.columns?.description ?? 'Test Case Description';
 
   const warnedCols = new Set();
 
@@ -35,6 +36,7 @@ export function loadTestSuite(config) {
     const name = row[colName];
     const area = row[colArea];
     const priority = row[colPriority];
+    const description = row[colDescription];
 
     if (!name && !warnedCols.has(colName)) {
       console.error(chalk.yellow(`Warning: column "${colName}" not found in CSV — skipping name mapping.`));
@@ -49,6 +51,7 @@ export function loadTestSuite(config) {
       name: (name ?? '').trim(),
       area: (area ?? '').trim(),
       priority: (priority ?? '').trim(),
+      description: (description ?? '').trim(),
     };
   }).filter(t => t.name);
 }
@@ -68,9 +71,14 @@ export function findRelevantTests(testSuite, areas) {
 
   const lowerAreas = areas.map(a => a.toLowerCase());
 
-  const matched = testSuite.filter(test =>
-    lowerAreas.some(area => test.area.toLowerCase().includes(area) || area.includes(test.area.toLowerCase()))
-  );
+  const matched = testSuite.filter(test => {
+    const description = test.description.toLowerCase();
+    return lowerAreas.some(area =>
+      test.area.toLowerCase().includes(area) ||
+      area.includes(test.area.toLowerCase()) ||
+      (description && description.includes(area))
+    );
+  });
 
   const priorityOrder = { high: 0, medium: 1, low: 2 };
   return matched.sort((a, b) => {

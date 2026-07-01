@@ -71,6 +71,11 @@ export async function runInit() {
     default: 'Priority',
   });
 
+  const colDescription = await input({
+    message: 'Column for test description:',
+    default: 'Test Case Description',
+  });
+
   const llmProvider = await select({
     message: 'LLM provider:',
     choices: [
@@ -164,6 +169,7 @@ export async function runInit() {
         name: colName,
         area: colArea,
         priority: colPriority,
+        description: colDescription,
       },
     },
     llm: llmConfig,

@@ -67,7 +67,9 @@ function buildUserPrompt(ticket, wikiPages, testSuite) {
     ? wikiPages.map(p => `## ${p.title}\n${p.content}`).join('\n\n')
     : '_No related documentation found._';
 
-  const testSection = testSuite.map(t => `${t.name} | Area: ${t.area} | Priority: ${t.priority}`).join('\n');
+  const testSection = testSuite.map(t =>
+    `${t.name} | Area: ${t.area} | Priority: ${t.priority}${t.description ? ` | Description: ${t.description}` : ''}`
+  ).join('\n');
 
   return `TICKET:
 Key: ${ticket.key}
@@ -145,7 +147,7 @@ function formatSourceDump(ticket, wikiPages, testSuite) {
     lines.push('  No tests loaded.');
   } else {
     for (const t of testSuite) {
-      lines.push(`  - ${t.name} | Area: ${t.area} | Priority: ${t.priority}`);
+      lines.push(`  - ${t.name} | Area: ${t.area} | Priority: ${t.priority}${t.description ? ` | Description: ${t.description}` : ''}`);
     }
   }
 
