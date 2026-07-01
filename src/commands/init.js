@@ -169,7 +169,7 @@ export async function runInit() {
     llm: llmConfig,
     output: {
       format: outputFormat,
-      saveReports: false,
+      saveReports: true,
       reportsDir: './ripple-reports',
     },
   };

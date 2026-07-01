@@ -1,3 +1,5 @@
+import { validateHttpsUrl } from '../utils/validate-url.js';
+
 function adfToText(node) {
   if (!node) return '';
 
@@ -58,6 +60,7 @@ async function jiraFetch(url, config) {
 }
 
 export async function fetchTicket(ticketKey, config) {
+  validateHttpsUrl(config.jira.url, 'Jira');
   const url = `${config.jira.url}/rest/api/3/issue/${encodeURIComponent(ticketKey)}`;
   let data;
 
@@ -97,6 +100,7 @@ export async function fetchTicket(ticketKey, config) {
 }
 
 export async function fetchRemoteLinks(ticketKey, config) {
+  validateHttpsUrl(config.jira.url, 'Jira');
   const url = `${config.jira.url}/rest/api/3/issue/${encodeURIComponent(ticketKey)}/remotelink`;
   let data;
 
@@ -123,6 +127,7 @@ export async function fetchRemoteLinks(ticketKey, config) {
 }
 
 export async function fetchReleaseTickets(versionName, config) {
+  validateHttpsUrl(config.jira.url, 'Jira');
   const safeVersion = versionName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const jql = `project="${config.jira.projectKey}" AND fixVersion="${safeVersion}"`;
   const baseUrl = `${config.jira.url}/rest/api/3/search`;
