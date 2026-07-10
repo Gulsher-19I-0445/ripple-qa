@@ -339,7 +339,7 @@ function outputAnalysis(analysis, config, options, ticketKey) {
   }
 }
 
-function aggregateReleaseAnalyses(analyses) {
+export function aggregateReleaseAnalyses(analyses) {
   const riskOrder = { HIGH: 2, MEDIUM: 1, LOW: 0 };
   const overallRisk = analyses.reduce((max, a) => {
     return (riskOrder[a.riskLevel] ?? 0) > (riskOrder[max] ?? 0) ? a.riskLevel : max;

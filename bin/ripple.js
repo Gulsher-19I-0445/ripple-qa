@@ -6,6 +6,7 @@ import { dirname, resolve } from 'path';
 import { Command, Option } from 'commander';
 import { runInit } from '../src/commands/init.js';
 import { runAnalyze } from '../src/commands/analyze.js';
+import { runMcpSetup } from '../src/commands/mcp-setup.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const { version } = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf8'));
@@ -32,5 +33,10 @@ program
   .option('--verbose', 'Show raw source data before sending to LLM')
   .addOption(new Option('--no-llm', 'Fetch sources only — no data sent to LLM'))
   .action(runAnalyze);
+
+program
+  .command('mcp-setup')
+  .description('Install dependencies for the MCP server (enables /ripple in Claude Code, Copilot CLI, etc.)')
+  .action(runMcpSetup);
 
 program.parse();

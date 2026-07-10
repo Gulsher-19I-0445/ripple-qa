@@ -25,6 +25,7 @@
   "files": [
     "bin",
     "src",
+    "mcp",
     "README.md"
   ],
   "type": "module",
@@ -34,7 +35,8 @@
   "scripts": {
     "start": "node bin/ripple.js",
     "dev": "node --watch bin/ripple.js",
-    "audit": "npm audit --audit-level=high"
+    "audit": "npm audit --audit-level=high",
+    "mcp": "node mcp/src/index.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

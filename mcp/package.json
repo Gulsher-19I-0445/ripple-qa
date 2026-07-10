@@ -1,0 +1,19 @@
+{
+  "name": "ripple-qa-mcp",
+  "version": "0.1.0",
+  "description": "MCP server exposing Ripple's Jira/Confluence/test-suite data-fetching as tools for AI coding agents (Claude Code, GitHub Copilot CLI, Antigravity CLI, etc). Data-plane only — it never calls an LLM itself; the calling agent's own session model does the impact-analysis reasoning.",
+  "type": "module",
+  "private": true,
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "dotenv": "^16.4.5",
+    "zod": "^4.4.3"
+  }
+}

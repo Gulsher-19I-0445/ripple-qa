@@ -8,3 +8,5 @@ dist/
 ripple.config.json
 regression.csv
 ripple-reports/
+.claude/agent-memory/
+.claude/agents/
