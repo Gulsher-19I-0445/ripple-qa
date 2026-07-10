@@ -98,6 +98,30 @@ A tool that you can call inside claude using /ripple <command>. It supports all 
 - Confluence returning no results is a warning, not an error — pipeline continues
 - LLM returning invalid JSON: retry once, then throw descriptive error (v1 CLI path only — the MCP/Skill path validates the model's analysis JSON structurally in `ripple__save_report` instead, since there's no raw LLM response to retry)
 
+## Multi-host skill/MCP-config sync (resolved)
+- `skills/ripple/SKILL.md` and `mcp/mcp-config.json` are the single source of truth — never
+  hand-edit `.claude/skills/ripple/SKILL.md`, `.agents/skills/ripple/SKILL.md`,
+  `.github/skills/ripple/SKILL.md`, `.opencode/skills/ripple/SKILL.md`, `.mcp.json`, or
+  `.agents/mcp_config.json` directly; they are generated copies.
+- `npm run sync:agents` (`scripts/sync-agents.mjs`) fans the canonical files out to every host's
+  expected path/filename (each CLI reads skills and MCP servers from a different convention —
+  Claude Code: `.claude/skills/*`, `.mcp.json`; Antigravity CLI: `.agents/skills/*`,
+  `.agents/mcp_config.json`; OpenCode: `.opencode/skills/*`). Run it after editing the canonical
+  source, and add a new host by adding one line to the `skillTargets`/`mcpConfigTargets` arrays in
+  the script rather than hand-copying files.
+- GitHub Copilot CLI needs no dedicated target of its own to *work* — per GitHub's docs it already
+  reads repo-level skills from `.github/skills`, `.claude/skills`, or `.agents/skills` (all three
+  exist here) and reads project-level MCP config from `.mcp.json`, which takes precedence over its
+  global `~/.copilot/mcp-config.json`. We still sync `.github/skills/ripple/SKILL.md` explicitly
+  since it's Copilot's primary/first-documented repo-level path. Unlike Claude Code/Antigravity,
+  Copilot CLI has no custom-slash-command primitive — `/ripple` works there only because Ripple is
+  wired as a Skill (auto-loaded by relevance, or explicitly invoked with `/ripple ...` in the
+  prompt), not because of a `.github/prompts/`-style custom command (no such directory support
+  exists yet in Copilot CLI as of this writing).
+- This mirrors the pattern used by github.com/santifer/career-ops: one router/instruction file,
+  duplicated per-host directory (since none of these CLIs support includes/symlinks across
+  arbitrary paths), kept in sync by script instead of by hand.
+
 ## Net-new scope, explicitly deferred (not built)
 - `scan_sprint` / `get_daily_digest`: no v1 precedent, would need a scheduling primitive the MCP server can't provide alone. Revisit as a separate roadmap conversation.
 - Standalone whole-suite coverage-gap audit (independent of any ticket): `coverageGaps[]` is currently only produced as part of per-ticket analysis, per the resolved scope decision.

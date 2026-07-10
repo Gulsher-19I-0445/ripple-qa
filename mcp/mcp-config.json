@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ripple": {
+      "command": "node",
+      "args": ["mcp/src/index.js"],
+      "cwd": "."
+    }
+  }
+}

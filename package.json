@@ -36,7 +36,8 @@
     "start": "node bin/ripple.js",
     "dev": "node --watch bin/ripple.js",
     "audit": "npm audit --audit-level=high",
-    "mcp": "node mcp/src/index.js"
+    "mcp": "node mcp/src/index.js",
+    "sync:agents": "node scripts/sync-agents.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
