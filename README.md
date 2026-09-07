@@ -167,6 +167,7 @@ All non-secret configuration lives in `ripple.config.json` (safe to commit).
 | `github.maxFiles` | Max changed files to include — default `50` |
 | `github.maxPatchChars` | Max patch characters per file — default `4000` |
 | `github.maxDiffChars` | Max patch characters across the whole diff — default `60000` |
+| `github.maxBodyChars` | Max PR/commit description characters per ref — default `4000` |
 | `llm.provider` | LLM provider: `claude` (default), `github`, `openai`, `ollama` |
 | `llm.model` | Model ID — default depends on provider (e.g. `claude-sonnet-4-6`, `llama3.1:8b`) |
 | `llm.baseURL` | API base URL — required for `ollama`, optional for `openai` |

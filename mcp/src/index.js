@@ -70,8 +70,9 @@ const TOOLS = [
     name: GET_DIFF_CONTEXT_NAME,
     description:
       'Fetches the code changes (pull requests / commits) behind a Jira ticket from GitHub: '  +
-      'ref metadata, per-file add/delete counts, and capped patch bodies. Resolves the change '  +
-      'by explicit pr/commit/compare, else the Jira development panel, else a GitHub search for '  +
+      'ref metadata, per-file add/delete counts, and capped patch and description bodies. '  +
+      'Resolves the change by explicit pr/commit/compare, else the Jira development panel, '  +
+      'else a GitHub search for '  +
       'the ticket key. The repository is fixed by ripple.config.json and cannot be chosen by the '  +
       'caller. Data only — it does not analyze impact; copy the returned codeChangesFacts object '  +
       'verbatim into your analysis JSON rather than retyping its values.',

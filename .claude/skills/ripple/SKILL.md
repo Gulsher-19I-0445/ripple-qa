@@ -125,7 +125,10 @@ reasoning output, not something a tool returns to you.
 - You produce **only** `modules` and `riskSignals` — that is the judgment half.
 - Then **copy the `codeChangesFacts` object from the tool result verbatim** into the same
   `codeChanges` block (it carries `source`, `repo`, `refs`, `filesChanged`, `additions`,
-  `deletions`). Do not retype, recount, reformat or abbreviate any value in it, and never
+  `deletions`, `truncated`, `omittedFiles`, `truncatedBodies`). Copy **every** key it has,
+  including the truncation counters — they are the only record that the diff was incomplete, and
+  a report missing them looks like a complete diff.
+  Do not retype, recount, reformat or abbreviate any value in it, and never
   reconstruct a PR URL or a file count from memory. Those are facts Ripple fetched; a report
   that a QA engineer acts on must not contain a model-authored PR link or diff stat.
 

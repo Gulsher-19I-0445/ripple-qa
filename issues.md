@@ -184,3 +184,74 @@ different timestamp formats.
 
 **Not fixed.** The `--release` aggregation gap itself is a real behavioural inconsistency but was
 explicitly out of scope for the diff feature. It remains open under `knownGaps`.
+
+---
+
+## 2026-09-07 — PR/commit body text had no size cap (KAN-14)
+
+**Status:** resolved
+**Area:** `src/sources/github.js`, `mcp/src/tools/get-release-context.js`
+**Jira:** [KAN-14](https://shopflow-demo.atlassian.net/browse/KAN-14)
+
+**What happened.** `fetchDiffContext()` bounds every piece of fetched content — `maxRefs`,
+`maxFiles`, `maxPatchChars`, and `maxDiffChars` as a budget charged across refs — except one:
+PR/commit description text was pushed into `bodies[]` as-is, at any size, charging nothing.
+
+**Impact.** Worst on the MCP path, where `ripple__get_diff_context` returns the whole
+`diffContext` (bodies included) straight into the host model's context window. A pasted
+changelog or an accidental log dump in a PR description bypassed `github.maxDiffChars`
+entirely. On the CLI the blast radius was smaller: bodies reach neither the prompt nor the
+source dump, only the `warnOnSecrets` scrub.
+
+**Fix.** Two bounds at two levels, because one description and one response are different
+problems:
+
+1. *Per ref.* New `github.maxBodyChars` (default 4000, mirroring `maxPatchChars`) in
+   `fetchDiffContext`. A body over it is sliced, counted in `totals.truncatedBodies` and
+   `codeChangesFacts.truncatedBodies`, and a warning is pushed to `warnings[]`. The slice length
+   is clamped with `Math.max(0, ...)` — `slice(0, -100)` means "all but the last 100 chars", so a
+   negative config value would otherwise invert the field's meaning rather than just skip the cap.
+2. *Per release response.* `maxBodyChars` bounds one description and says nothing about how many
+   arrive together, so `ripple__get_release_context` — which returns every ticket at once — does
+   its own trimming: after each ticket's patches are charged against the release budget, its
+   bodies are handed only the room left, and get nothing once the budget is spent (a warning
+   naming `github.maxDiffChars` goes into that ticket's `diffContext.warnings`). Release-level
+   trimming is deliberately NOT folded into `totals.truncatedBodies`, which records only what the
+   per-ref cap did.
+
+**Correction (found in code review, not by design).** The first version of the release-side change
+only added body lengths into the `spent` subtraction. That made the bookkeeping honest but enforced
+nothing: `remainingBudget` is forwarded as `diffCharBudget`, which gates *patches* only
+(`remainingChars` in `github.js`) — `fetchDiffContext` never consults any budget before pushing a
+body. So the exact scenario this ticket was raised to prevent (30 tickets x 5 refs x 4000 chars =
+600,000 chars) was still reachable, and the code comment, this entry, and `progress_logs.json` all
+claimed otherwise. Code review caught it; the aggregate trimming in point 2 above is what actually
+closes the hole, and it ships with `tests/get-release-context.test.js` pinning the bound
+(that test fails against the charging-only version).
+
+**Two decisions worth recording.**
+
+1. *A cut body does NOT set `truncated`.* That flag means "diff content is being withheld":
+   `formatSourceDump` renders it as "showing N of M file(s)" and `SKILL.md` rule F turns it into
+   an instruction to distrust the file list. On a complete two-file PR with a long description,
+   reusing the flag would print "Truncated: showing 2 of 2 file(s)" and put a false claim into
+   `riskReason` — the same conflation the comments at `github.js:626-638` already guard against
+   for deny-listed patches. Body truncation is a fourth distinct condition with its own counter.
+2. *Bodies are not charged against `remainingChars`, but ARE charged against — and trimmed to —
+   the release budget.* Not an inconsistency: the same config number does two jobs. In
+   `github.js` it is a patch budget feeding the prompt, and spending it on prose the prompt never
+   includes would be a pure loss. In `get-release-context.js` it is a total-context guard on one
+   response carrying every ticket's bodies verbatim, so bodies are both debited and cut there.
+   Both sites are commented so neither gets "fixed" into the other — in particular, the release
+   bound lives in `get-release-context.js` rather than as a `skipBodies` flag threaded into
+   `fetchDiffContext`, so the per-run path keeps its patch-budget semantics unchanged.
+
+**Residual cost, accepted.** `warnOnSecrets` now scans the capped body, so a credential sitting
+past char 4000 of a PR description no longer raises the hygiene warning. This is not an exposure
+regression — that warning's text is about content *"that will be sent to the LLM"*, and text past
+the cap is never sent and never reaches `-sources.txt`. Cap-before-scan is also forced by the
+design: `github.js:6-9` forbids the module from printing, so `fetchDiffContext` cannot call
+`warnOnSecrets` itself, and returning the uncapped body for consumers to scan would defeat the cap.
+
+**Out of scope, follow-up worth filing.** `refs[].title` is also uncapped and *does* reach the
+prompt (a commit title is the first line of a commit message, which has no enforced length).

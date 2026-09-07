@@ -21,6 +21,11 @@ export const GITHUB_DEFAULTS = Object.freeze({
   maxFiles: 50,
   maxPatchChars: 4000,
   maxDiffChars: 60000,
+  // PR/commit description text. Deliberately NOT charged against maxDiffChars:
+  // that budget feeds the patch content the analysis reasons over, and a long
+  // description would otherwise starve it in exchange for prose the CLI prompt
+  // never even includes. The bound here is maxRefs x maxBodyChars instead.
+  maxBodyChars: 4000,
 });
 
 // Patch bodies for these are dropped; the file still appears with its line counts.
@@ -547,7 +552,7 @@ export async function fetchDiffContext(ticket, config, options = {}) {
     repo: `${s.owner}/${s.repo}`,
     refs: [],
     files: [],
-    totals: { filesChanged: 0, additions: 0, deletions: 0, omittedFiles: 0 },
+    totals: { filesChanged: 0, additions: 0, deletions: 0, omittedFiles: 0, truncatedBodies: 0 },
     truncated: false,
     warnings,
     codeChangesFacts: null,
@@ -563,6 +568,12 @@ export async function fetchDiffContext(ticket, config, options = {}) {
   let deletions = 0;
   let omittedFiles = 0;
   let truncated = false;
+  // Counted separately from `truncated`, never folded into it. `truncated` means
+  // "diff content is being withheld", which formatSourceDump renders as
+  // "showing N of M file(s)" and SKILL.md turns into an instruction to distrust
+  // the file list. A cut description says nothing about the file list, so
+  // conflating them would put a false claim into the report.
+  let truncatedBodies = 0;
   // maxDiffChars is a budget across ALL refs, not per ref.
   let remainingChars = options.diffCharBudget ?? s.maxDiffChars;
 
@@ -593,7 +604,32 @@ export async function fetchDiffContext(ticket, config, options = {}) {
       author: payload.meta.author,
       mergedAt: payload.meta.mergedAt,
     });
-    if (payload.meta.body) bodies.push(payload.meta.body);
+    // Bodies reach the model verbatim on the MCP path (the whole diffContext is
+    // the tool response), so they get the same kind of upper bound every other
+    // fetched thing in this module has. The warning is what makes the cut
+    // visible on the CLI, where bodies appear in neither the prompt nor the
+    // source dump — without it the truncation would show up only in JSON output.
+    const body = payload.meta.body ?? '';
+    if (body) {
+      // Clamped because slice's end argument counts from the END when negative:
+      // a config typo of -100 would make slice(0, -100) keep all but the last
+      // 100 chars — the opposite of a cap — while still reporting a truncation.
+      const cap = Math.max(0, s.maxBodyChars);
+      if (body.length > cap) {
+        // At cap 0 nothing is pushed at all: an entry of '' would be
+        // indistinguishable from a ref that genuinely has no description.
+        // The count and the warning still fire, so the cut stays visible.
+        const capped = body.slice(0, cap);
+        if (capped) bodies.push(capped);
+        truncatedBodies += 1;
+        warnings.push(
+          `${payload.meta.type.toUpperCase()} ${payload.meta.id} description was longer than ` +
+            `github.maxBodyChars (${s.maxBodyChars}) and was cut short.`
+        );
+      } else {
+        bodies.push(body);
+      }
+    }
 
     additions += payload.additions;
     deletions += payload.deletions;
@@ -676,7 +712,7 @@ export async function fetchDiffContext(ticket, config, options = {}) {
     refs: refMetas,
     files,
     bodies,
-    totals: { filesChanged: declaredTotal, additions, deletions, omittedFiles },
+    totals: { filesChanged: declaredTotal, additions, deletions, omittedFiles, truncatedBodies },
     truncated,
     warnings,
     // The deterministic half of the analysis's codeChanges block. Code owns
@@ -697,6 +733,10 @@ export async function fetchDiffContext(ticket, config, options = {}) {
       deletions,
       truncated,
       omittedFiles,
+      // Distinct from `truncated` for the reason given at its declaration: a cut
+      // description is not a withheld diff. Recorded here so a saved report
+      // cannot look complete when a body was cut.
+      truncatedBodies,
     },
   };
 }

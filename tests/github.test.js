@@ -239,7 +239,7 @@ test('a search result outside the allowlist is dropped', async () => {
 
 /* ------------------------ diff + capping ------------------------ */
 
-function prRoutes({ changedFiles, files, additions = 10, deletions = 5 }) {
+function prRoutes({ changedFiles, files, additions = 10, deletions = 5, body = 'Fixes KAN-4' }) {
   return [
     { match: '/pulls/42/files', body: files },
     {
@@ -250,7 +250,7 @@ function prRoutes({ changedFiles, files, additions = 10, deletions = 5 }) {
         state: 'closed',
         merged_at: '2026-09-01T00:00:00Z',
         user: { login: 'dev' },
-        body: 'Fixes KAN-4',
+        body,
         changed_files: changedFiles,
         additions,
         deletions,
@@ -312,6 +312,67 @@ test('maxDiffChars is a budget across files, not per file', async () => {
   }
 });
 
+test('a body under maxBodyChars is passed through untouched', async () => {
+  const body = 'Fixes the rounding bug.\n\nSee the linked spec.';
+  const stub = installFetchStub(prRoutes({ changedFiles: 1, files: prFilesPayload(1), body }));
+  try {
+    const ctx = await fetchDiffContext(ticket, baseConfig, { pr: 42 });
+    assert.equal(ctx.bodies[0], body, 'a normal description must not be altered');
+    assert.equal(ctx.totals.truncatedBodies, 0);
+    assert.ok(!ctx.warnings.some(w => w.includes('maxBodyChars')), 'no warning for a normal body');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('a body over maxBodyChars is cut, counted and warned about — but is NOT diff truncation', async () => {
+  const stub = installFetchStub(
+    prRoutes({ changedFiles: 1, files: prFilesPayload(1), body: 'b'.repeat(9000) })
+  );
+  try {
+    const ctx = await fetchDiffContext(ticket, baseConfig, { pr: 42 });
+
+    assert.equal(ctx.bodies[0].length, 4000, 'capped at maxBodyChars');
+    assert.equal(ctx.totals.truncatedBodies, 1);
+    assert.equal(ctx.codeChangesFacts.truncatedBodies, 1, 'a saved report must record the cut');
+    assert.ok(ctx.warnings.some(w => w.includes('maxBodyChars')), 'the cut must be surfaced');
+
+    // The load-bearing assertion. `truncated` means diff content was withheld:
+    // formatSourceDump renders it as "showing N of M file(s)" and SKILL.md turns
+    // it into an instruction to distrust the file list. This PR's single file is
+    // fully present, so a long description must not trigger either claim.
+    assert.equal(ctx.truncated, false, 'a cut description is not a withheld diff');
+    assert.equal(ctx.totals.omittedFiles, 0);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('body length does not consume the patch budget', async () => {
+  const files = prFilesPayload(3, 4000);
+  const short = installFetchStub(prRoutes({ changedFiles: 3, files, body: 'x' }));
+  let baseline;
+  try {
+    const ctx = await fetchDiffContext(ticket, baseConfig, { pr: 42 });
+    baseline = ctx.files.reduce((sum, f) => sum + f.patch.length, 0);
+  } finally {
+    short.restore();
+  }
+
+  // remainingChars is internal and never returned, so the budget is asserted
+  // through the patch content it admits.
+  const huge = installFetchStub(prRoutes({ changedFiles: 3, files, body: 'b'.repeat(50000) }));
+  try {
+    const ctx = await fetchDiffContext(ticket, baseConfig, { pr: 42 });
+    const used = ctx.files.reduce((sum, f) => sum + f.patch.length, 0);
+    assert.equal(used, baseline, 'a huge description must not starve the patch budget');
+    assert.equal(used, 12000, 'all three patches present at full length');
+    assert.ok(ctx.files.every(f => !f.truncated && !f.patchOmitted));
+  } finally {
+    huge.restore();
+  }
+});
+
 test('codeChangesFacts carries the deterministic half of codeChanges', async () => {
   const stub = installFetchStub(prRoutes({ changedFiles: 3, files: prFilesPayload(3) }));
   try {
@@ -334,6 +395,7 @@ test('codeChangesFacts carries the deterministic half of codeChanges', async () 
       // the model skips the rule-F instruction to mention truncation in prose.
       truncated: false,
       omittedFiles: 0,
+      truncatedBodies: 0,
     });
     // Judgment fields are absent — the model supplies those.
     assert.equal(ctx.codeChangesFacts.modules, undefined);
