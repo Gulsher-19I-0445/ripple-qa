@@ -31,6 +31,10 @@ program
   .option('--output <format>', 'Output format: markdown | json | both')
   .option('--save', 'Save report to ./ripple-reports/')
   .option('--verbose', 'Show raw source data before sending to LLM')
+  .option('--diff', 'Include GitHub code changes for the ticket in the analysis')
+  .option('--pr <number>', 'Analyze this specific pull request (implies --diff)')
+  .option('--commit <sha>', 'Analyze this specific commit (implies --diff)')
+  .option('--compare <range>', 'Analyze a base...head range, e.g. v1.0...main (implies --diff)')
   .addOption(new Option('--no-llm', 'Fetch sources only — no data sent to LLM'))
   .action(runAnalyze);
 

@@ -87,6 +87,9 @@ export async function fetchTicket(ticketKey, config) {
 
   return {
     key: data.key,
+    // Numeric issue id, distinct from the key. Needed by the GitHub dev-status
+    // lookup in src/sources/github.js, which keys off id rather than key.
+    id: data.id ?? null,
     summary: fields.summary ?? '',
     description,
     acceptanceCriteria,

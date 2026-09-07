@@ -1,3 +1,30 @@
+function renderCodeChanges(codeChanges) {
+  if (!codeChanges || (codeChanges.refs ?? []).length === 0) return '';
+
+  const refs = codeChanges.refs ?? [];
+  const refLines = refs
+    .map(r => `- **${r.type?.toUpperCase() ?? 'REF'} ${r.id}** ${r.title ?? ''}${r.url ? '\n  ' + r.url : ''}`)
+    .join('\n');
+
+  const modules = codeChanges.modules ?? [];
+  const signals = codeChanges.riskSignals ?? [];
+
+  const signalSection = signals.length > 0
+    ? signals.map(sig => `- **${sig.signal}** (${sig.severity})\n  → ${sig.detail}`).join('\n') + '\n'
+    : '_No specific risk signals identified in the diff._\n';
+
+  return `## Code Changes
+
+Repository: ${codeChanges.repo ?? 'unknown'} (discovered via ${codeChanges.source ?? 'unknown'})
+
+${refLines}
+
+${codeChanges.filesChanged ?? 0} file(s) changed, +${codeChanges.additions ?? 0}/-${codeChanges.deletions ?? 0}${modules.length > 0 ? ` across ${modules.join(', ')}` : ''}
+
+${signalSection}
+`;
+}
+
 export function formatMarkdown(analysis, { model, timestamp } = {}) {
   const ts = timestamp ?? new Date().toISOString();
   const mdl = model ?? 'claude-sonnet-4-6';
@@ -26,6 +53,17 @@ export function formatMarkdown(analysis, { model, timestamp } = {}) {
       ).join('\n\n') + '\n'
     : '_No coverage gaps identified._\n';
 
+  // Rendered only when a diff actually resolved. The condition is non-emptiness,
+  // not mere existence: a model can emit a codeChanges object on a run where the
+  // diff failed, and an empty '## Code Changes' heading is worse than none.
+  //
+  // The interpolation below sits at COLUMN 0 of the '## Recommended Tests' line
+  // for a reason — impactedTable already ends in a newline, so any other
+  // placement (its own line, a wrapping newline, a trailing blank line the empty
+  // branch also emits) silently adds a byte and breaks parity with reports that
+  // have no code changes. See tests/markdown-parity.test.js.
+  const codeChangesSection = renderCodeChanges(analysis.codeChanges);
+
   const testCount = analysis.recommendedTests?.length ?? 0;
   const wikiPages = analysis.contextSources?.wikiPagesUsed ?? [];
 
@@ -42,7 +80,7 @@ ${analysis.riskReason}
 ## Impacted Areas
 
 ${impactedTable}
-## Recommended Tests (${testCount})
+${codeChangesSection}## Recommended Tests (${testCount})
 
 ${renderTestGroup('HIGH', priorityGroups.HIGH)}${renderTestGroup('MEDIUM', priorityGroups.MEDIUM)}${renderTestGroup('LOW', priorityGroups.LOW)}${renderTestGroup('OTHER', priorityGroups.OTHER)}
 ## Coverage Gaps

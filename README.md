@@ -105,7 +105,39 @@ ripple analyze --ticket PROJ-1234 --save
 
 # Verbose mode (shows raw source data)
 ripple analyze --ticket PROJ-1234 --verbose
+
+# Include the actual code changes behind the ticket (needs a github block in config)
+ripple analyze --ticket PROJ-1234 --diff
+
+# Point at a specific pull request, commit, or range instead of auto-discovering
+ripple analyze --ticket PROJ-1234 --pr 42
+ripple analyze --ticket PROJ-1234 --commit a1b2c3d
+ripple analyze --ticket PROJ-1234 --compare v1.0...main
 ```
+
+### Code diff analysis
+
+With a `github` block in `ripple.config.json`, `--diff` adds the real code changes as a fourth
+context source alongside the ticket, wiki pages and test suite — so impacted areas are grounded
+in files that actually changed rather than inferred from the ticket text alone. The report gains
+a `## Code Changes` section.
+
+Ripple finds the change in this order, stopping at the first hit:
+
+1. **An explicit `--pr` / `--commit` / `--compare`** you pass.
+2. **Jira's Development panel** — accurate when the GitHub for Jira app is installed.
+3. **A GitHub search** for the ticket key in PR titles and bodies, then commit messages.
+
+Only the repository configured in `github.owner`/`github.repo` (plus anything you list in
+`github.allowedRepos`) is ever fetched. A pull request link discovered on a ticket that points
+somewhere else is ignored with a warning, never followed. A missing or unreachable diff is a
+warning, not an error — the analysis continues without it.
+
+> **Token scopes:** `GITHUB_TOKEN` is also used by `llm.provider: "github"` for GitHub Models,
+> where `models:read` is enough. Diff analysis needs `repo` scope. If you use both and the
+> scopes conflict, point the diff feature at a second token with
+> `"tokenEnv": "GITHUB_REPO_TOKEN"`. A token is optional for public repositories, though
+> unauthenticated requests are limited to 60/hour.
 
 ---
 
@@ -125,6 +157,17 @@ All non-secret configuration lives in `ripple.config.json` (safe to commit).
 | `testSuite.columns.name` | CSV column header for the test case name |
 | `testSuite.columns.area` | CSV column header for the feature area |
 | `testSuite.columns.priority` | CSV column header for the priority (High/Medium/Low) |
+| `github.owner` | GitHub org/user for diff analysis — **required** if a `github` block exists |
+| `github.repo` | GitHub repo name — **required** if a `github` block exists |
+| `github.allowedRepos` | Extra `"owner/repo"` entries also allowed to be fetched — default `[]` |
+| `github.apiBaseUrl` | GitHub API base — default `https://api.github.com` |
+| `github.htmlBaseUrl` | GitHub web base, used to validate discovered PR links — default `https://github.com` |
+| `github.tokenEnv` | Env variable holding the GitHub token — default `GITHUB_TOKEN` |
+| `github.maxRefs` | Max PRs/commits to pull per ticket — default `5` |
+| `github.maxFiles` | Max changed files to include — default `50` |
+| `github.maxPatchChars` | Max patch characters per file — default `4000` |
+| `github.maxDiffChars` | Max patch characters across the whole diff — default `60000` |
+| `github.maxBodyChars` | Max PR/commit description characters per ref — default `4000` |
 | `llm.provider` | LLM provider: `claude` (default), `github`, `openai`, `ollama` |
 | `llm.model` | Model ID — default depends on provider (e.g. `claude-sonnet-4-6`, `llama3.1:8b`) |
 | `llm.baseURL` | API base URL — required for `ollama`, optional for `openai` |
@@ -144,6 +187,7 @@ Store API keys in a `.env` file (never commit this file).
 | `ANTHROPIC_API_KEY` | API key from [console.anthropic.com](https://console.anthropic.com) |
 | `JIRA_API_TOKEN` | Jira API token from your Atlassian account settings |
 | `CONFLUENCE_API_TOKEN` | Confluence API token (usually the same as your Jira token for Atlassian Cloud) |
+| `GITHUB_TOKEN` | GitHub token — used by `--diff` (needs `repo` scope) and by GitHub Models (`models:read`). Optional for public repos. Override the variable name with `github.tokenEnv`. |
 
 ---
 
@@ -158,6 +202,7 @@ Store API keys in a `.env` file (never commit this file).
 | CSV test suite | ✅ | |
 | TestRail | | ✅ |
 | Zephyr Scale | | ✅ |
+| GitHub PRs / commit diffs | ✅ | |
 | GitHub Issues | | ✅ |
 
 ## Supported LLM Providers

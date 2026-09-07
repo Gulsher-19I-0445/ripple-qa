@@ -4,40 +4,9 @@ import { resolve } from 'node:path';
 import { authGate } from '../auth.js';
 import { internalError } from '../errors.js';
 import { fail, ok } from '../response.js';
+import { analysisShape } from '../schemas/analysis.js';
 
 export const TOOL_NAME = 'ripple__save_report';
-
-const impactedAreaShape = z.object({ area: z.string(), reason: z.string(), confidence: z.string() });
-const recommendedTestShape = z.object({
-  name: z.string(),
-  area: z.string(),
-  priority: z.string(),
-  reason: z.string(),
-});
-const coverageGapShape = z.object({ description: z.string(), suggestedTestCase: z.string() });
-const contextSourcesShape = z
-  .object({
-    wikiPagesUsed: z.array(z.string()).optional(),
-    testCasesEvaluated: z.number().optional(),
-    testCasesRecommended: z.number().optional(),
-  })
-  .optional();
-
-// Mirrors the Ripple analysis schema from src/commands/analyze.js's
-// SYSTEM_PROMPT. This is the validation boundary the security review called
-// for: the calling model's free-text output must pass this shape check
-// before anything is written to disk.
-const analysisShape = z.object({
-  ticketKey: z.string().min(1),
-  summary: z.string(),
-  riskLevel: z.enum(['HIGH', 'MEDIUM', 'LOW']),
-  riskReason: z.string(),
-  primaryFeature: z.string(),
-  impactedAreas: z.array(impactedAreaShape).optional(),
-  recommendedTests: z.array(recommendedTestShape).optional(),
-  coverageGaps: z.array(coverageGapShape).optional(),
-  contextSources: contextSourcesShape,
-});
 
 export const saveReportInputShape = {
   analysis: analysisShape.describe(

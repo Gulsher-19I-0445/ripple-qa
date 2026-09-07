@@ -76,6 +76,44 @@ export async function runInit() {
     default: 'Test Case Description',
   });
 
+  // Optional: linking a repo enables `ripple analyze --diff`, which grounds the
+  // impact analysis in the files a ticket actually changed.
+  const linkGithub = await confirm({
+    message: 'Link a GitHub repo for code-diff analysis (ripple analyze --diff)?',
+    default: false,
+  });
+
+  let github;
+  if (linkGithub) {
+    const ghOwner = await input({
+      message: 'GitHub owner / org (e.g. acme):',
+      validate: v => /^[A-Za-z0-9._-]+$/.test(v.trim()) || 'Use only letters, digits, . _ -',
+    });
+    const ghRepo = await input({
+      message: 'GitHub repo name (e.g. storefront):',
+      validate: v => /^[A-Za-z0-9._-]+$/.test(v.trim()) || 'Use only letters, digits, . _ -',
+    });
+    const ghEnterprise = await confirm({
+      message: 'Is this GitHub Enterprise (not github.com)?',
+      default: false,
+    });
+
+    github = { owner: ghOwner.trim(), repo: ghRepo.trim() };
+
+    if (ghEnterprise) {
+      github.apiBaseUrl = await input({
+        message: 'GitHub Enterprise API base URL (e.g. https://ghe.corp/api/v3):',
+        validate: v => v.startsWith('https://') || 'Please enter a URL starting with https://',
+      });
+      // The API host is never the host that appears in PR links, so it needs its
+      // own answer rather than being derived from the API URL.
+      github.htmlBaseUrl = await input({
+        message: 'GitHub Enterprise web URL (e.g. https://ghe.corp):',
+        validate: v => v.startsWith('https://') || 'Please enter a URL starting with https://',
+      });
+    }
+  }
+
   const llmProvider = await select({
     message: 'LLM provider:',
     choices: [
@@ -172,6 +210,7 @@ export async function runInit() {
         description: colDescription,
       },
     },
+    ...(github ? { github } : {}),
     llm: llmConfig,
     output: {
       format: outputFormat,
@@ -198,7 +237,7 @@ export async function runInit() {
   console.log(chalk.green('\nCreated ripple.config.json'));
 
   // Write .env.example with the right key name for the chosen provider
-  const envKeys = buildEnvExample(llmProvider, llmApiKeyEnv);
+  const envKeys = buildEnvExample(llmProvider, llmApiKeyEnv, Boolean(github));
   if (!existsSync(envExamplePath)) {
     writeFileSync(envExamplePath, envKeys, 'utf8');
     console.log(chalk.green('Created .env.example'));
@@ -219,20 +258,22 @@ export async function runInit() {
   console.log('');
 }
 
-function buildEnvExample(provider, customKeyEnv) {
+function buildEnvExample(provider, customKeyEnv, withGithubDiff = false) {
   const jiraLine = 'JIRA_API_TOKEN=...\n';
   const confluenceLine = 'CONFLUENCE_API_TOKEN=...\n';
+  // Needed for private repos, and lifts GitHub's 60 req/hour unauthenticated limit.
+  const githubLine = withGithubDiff ? 'GITHUB_TOKEN=github_pat_...\n' : '';
 
   if (provider === 'claude') {
-    return `ANTHROPIC_API_KEY=sk-ant-...\n${jiraLine}${confluenceLine}`;
+    return `ANTHROPIC_API_KEY=sk-ant-...\n${jiraLine}${confluenceLine}${githubLine}`;
   }
   if (provider === 'github') {
     return `GITHUB_TOKEN=github_pat_...\n${jiraLine}${confluenceLine}`;
   }
   if (provider === 'ollama') {
-    return `# No LLM API key required for Ollama — it runs locally\n${jiraLine}${confluenceLine}`;
+    return `# No LLM API key required for Ollama — it runs locally\n${jiraLine}${confluenceLine}${githubLine}`;
   }
   // openai / custom
   const keyEnv = customKeyEnv || 'OPENAI_API_KEY';
-  return `${keyEnv}=...\n${jiraLine}${confluenceLine}`;
+  return `${keyEnv}=...\n${jiraLine}${confluenceLine}${githubLine}`;
 }

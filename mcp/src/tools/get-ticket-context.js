@@ -25,6 +25,24 @@ export const getTicketContextInputShape = {
         'Must be a bare filename (no path separators) resolving inside the same directory as the configured test suite.'
     ),
   columns: columnsShape.describe('Optional CSV column-name overrides'),
+  includeDiff: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe(
+      'Also fetch the GitHub code changes behind this ticket (same data as ' +
+        'ripple__get_diff_context, including codeChangesFacts). Defaults to false so a plain ' +
+        'context fetch issues no GitHub requests.'
+    ),
+  diffCharBudget: z
+    .number()
+    .int()
+    // nonnegative, not positive: get_release_context passes 0 once the
+    // release-wide budget is spent, which is how later tickets degrade to
+    // counts-only rather than an error.
+    .nonnegative()
+    .optional()
+    .describe('Internal: caps total patch characters, used by ripple__get_release_context to budget across tickets.'),
 };
 
 // Security fix: the previous scaffold accepted a free-form testSuitePath and
@@ -141,10 +159,33 @@ export async function handleGetTicketContext(input) {
 
   const matchedTests = findRelevantTests(testSuite, [...ticket.components, ...ticket.labels]);
 
+  // Off by default: a plain context fetch must issue zero GitHub requests, both
+  // to keep latency unchanged for existing callers and to stop a 30-ticket
+  // release from firing 30 extra round trips unless it was actually asked for.
+  let diffContext = null;
+  if (input.includeDiff && config.github) {
+    const { fetchDiffContext } = await import('../../../src/sources/github.js');
+    try {
+      diffContext = await fetchDiffContext(ticket, config, {
+        diffCharBudget: input.diffCharBudget,
+      });
+      for (const body of diffContext.bodies ?? []) {
+        warnOnSecrets(body, 'pull request description');
+      }
+      for (const file of diffContext.files) {
+        if (file.patch) warnOnSecrets(file.patch, `patch for ${file.path}`);
+      }
+    } catch {
+      // Non-fatal, like Confluence: the analysis proceeds without diff context.
+      diffContext = null;
+    }
+  }
+
   return ok(TOOL_NAME, {
     ticket,
     wikiPages,
     testSuite: { totalLoaded: testSuite.length, source: testSuiteConfig.testSuite.path },
     matchedTests,
+    ...(diffContext ? { diffContext } : {}),
   });
 }

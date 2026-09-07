@@ -1,0 +1,105 @@
+{
+  "_meta": {
+    "lastAudited": "2026-09-07",
+    "auditMethod": "Every claim below was checked against the source rather than carried forward. Claims that did not match the code were corrected, not deleted — see progress_logs.json entries dated 2026-09-07 with topic 'Feature-record audit' for what changed and why.",
+    "testSuite": "npm test — 65 tests, all passing as of 2026-09-08 (KAN-14)",
+    "codeReview": "Adversarial code review run 2026-09-07 found 2 blockers and 6 warnings in the v2.1 diff feature; all were fixed and covered by regression tests before this record was finalised. See progress_logs.json entries topic-prefixed \"Code review fixes\"."
+  },
+  "v1": {
+    "status": "shipped",
+    "features": [
+      "Jira ticket test-impact analysis (--ticket <keys...>, one or more)",
+      "Multi-ticket analysis (two or more --ticket keys) aggregates the per-ticket analyses via aggregateReleaseAnalyses (max risk level, impacted areas deduped by area keeping highest confidence, tests deduped by name, gaps deduped by description)",
+      "Release-level analysis (--release <version>): resolves the fixVersion to its ticket keys via fetchReleaseTickets and analyzes each one, printing one report per ticket — see knownGaps, this path does NOT aggregate",
+      "Test selection from existing suites (CSV-based, delimiter auto-detection across comma/semicolon/tab, configurable column names, description column support)",
+      "findRelevantTests: selects test cases by bidirectional substring overlap between ticket components/labels and the test's Feature Area, OR the ticket area appearing in the test's description; sorts High/Medium/Low with unknown priorities last",
+      "Markdown report output (default)",
+      "JSON report output (--output json)",
+      "Combined output (--output both: markdown + json in one run)",
+      "--save flag writes the report to ./ripple-reports/ — see knownGaps, the CLI and MCP paths use different timestamp formats in the filename",
+      "--verbose flag: prints raw ticket/Confluence/test-suite data, the fetched code-diff context, and the raw LLM response before rendering",
+      "--no-llm flag: fetch-only mode that dumps ticket/Confluence/test-suite/code-change context to the terminal (and to a `-sources.txt` file with --save) without calling any LLM",
+      "Interactive init wizard (@inquirer/prompts) — creates ripple.config.json, optionally including the github block, and writes a provider-appropriate .env.example",
+      "`ripple mcp-setup` CLI command — runs `npm install --omit=dev` inside mcp/ and prints a ready-to-paste .mcp.json snippet plus host-restart steps for Claude Code, Copilot CLI, or Antigravity",
+      "Confluence context lookup (non-fatal warning if empty), plus direct fetch of Confluence pages linked to the ticket via Jira remote links (deduplicated by URL)",
+      "Multi-provider LLM support via createLLM(config): claude (Anthropic SDK, default), github (GitHub Models, OpenAI-compatible), openai (OpenAI-compatible, custom baseURL/apiKeyEnv), ollama (local, defaults to http://127.0.0.1:11434/v1). An unknown provider throws a descriptive error naming the four supported values.",
+      "Secret-scrubbing warnings (warnOnSecrets) before content reaches any LLM or disk — covers ticket description, acceptance criteria, wiki page content, pull request bodies and patch bodies, on both the CLI and MCP paths. All of these run before the --no-llm early return, because fetch-only mode still prints that content and, with --save, writes it to a -sources.txt file.",
+      "HTTPS-only enforcement (validateHttpsUrl; localhost exempted) on every configured base URL: Jira, Confluence, the GitHub API, and custom LLM baseURLs — so credentials cannot leak to an accidental plaintext endpoint",
+      "CSV test-suite path confined to the project root (path-traversal guard in loadTestSuite)",
+      "npm packaging: `ripple` bin entry plus a files whitelist (bin, src, mcp, README.md) so the published package carries the MCP server but no dev artifacts"
+    ]
+  },
+  "v2": {
+    "status": "shipped",
+    "features": [
+      "MCP server (mcp/) exposing Ripple as /ripple inside Claude Code and other MCP-capable hosts — tracked in git with its own package.json (no leftover TS/scaffold artifacts)",
+      "Claude Code Skill (skills/ripple/SKILL.md, canonical) carrying the analysis reasoning contract, workflow rules, and markdown rendering template",
+      "Dedicated Claude Code custom slash command (.claude/commands/ripple.md) that invokes the ripple Skill for a named ticket/release",
+      "Five MCP tools, all fully implemented (no stubs): ripple__get_ticket_context, ripple__get_release_context (fans out to get_ticket_context per ticket), ripple__get_diff_context, ripple__aggregate_release_analysis (deterministic merge math reusing v1's aggregateReleaseAnalyses unchanged), ripple__save_report (calls v1's formatMarkdown/formatJson unchanged, validates the analysis JSON shape via zod before writing)",
+      "authGate(): every MCP tool call is gated on a loadable ripple.config.json plus a configured CONFLUENCE_API_TOKEN — except ripple__get_diff_context, which passes { requireConfluence: false } because it needs Jira and GitHub but never touches Confluence, and would otherwise lock out operators who do not use Confluence at all",
+      "Structured MCP error envelope (RippleErrorCode: MISSING_ENV_VAR, CONFIG_ERROR, AUTH_FAILED, INVALID_INPUT, INTERNAL_ERROR, TICKET_NOT_FOUND, UPSTREAM_ERROR) with secret-pattern redaction applied to every error message before it reaches the calling model; per-source mappers for Jira, Confluence and GitHub",
+      "Matching success envelope: every tool result carries meta { ripple_mcp_version, timestamp, tool }, so a calling model can tell which server version produced a result",
+      "registerSafely() wrapper + startup guard in mcp/src/index.js — refuses to boot if any tool bypasses the try/catch-to-structured-error path",
+      "testSuitePath override hardened: must be a bare filename resolving inside the same directory as the configured CSV (not just 'inside the project root'), closing the MCP-input trust-boundary gap identified in security review",
+      "RIPPLE_PROJECT_ROOT env var (optional): pins the project root and chdirs once at startup when a host spawns the server with an unexpected cwd, so every reused v1 function keeps resolving paths off process.cwd() unchanged",
+      "Skill documents an optional Atlassian Rovo MCP connector path: ripple__get_ticket_context is the DEFAULT and is always required for the CSV test-suite match, and the model may additionally prefer Rovo's tools (getJiraIssue, searchConfluenceUsingCql) for ticket/Confluence fetching when that connector is active in the session",
+      "Skill always calls ripple__save_report automatically after rendering an analysis (single ticket or release) — no --save flag or confirmation prompt needed in the MCP/Skill path",
+      "Multi-host distribution: Claude Code, GitHub Copilot CLI, Antigravity CLI, OpenCode",
+      "npm run sync:agents fan-out script (scripts/sync-agents.mjs) keeping per-host skill/MCP config copies in sync with the canonical sources — verified byte-identical to their targets"
+    ]
+  },
+  "v2.1": {
+    "status": "shipped",
+    "summary": "GitHub code-diff analysis — adds actual code changes as a fourth context source alongside the ticket, wiki pages and test suite.",
+    "features": [
+      "GitHub code-diff analysis (src/sources/github.js), shared by both surfaces: v1 CLI flags --diff/--pr/--commit/--compare, and the ripple__get_diff_context MCP tool plus an includeDiff pass-through on ripple__get_ticket_context / ripple__get_release_context",
+      "Three-tier diff discovery cascade with fixed precedence: explicit --pr/--commit/--compare, then the Jira dev-status Development panel (which needs the ticket's numeric id, so fetchTicket now also returns `id`), then a GitHub search of PR titles/bodies and commit messages for the ticket key. Each tier falls through on a miss with a warning instead of throwing.",
+      "Repo allowlist as the GitHub trust boundary: the repository is never model-selectable and never taken from a discovered URL. Every ref (explicit, dev-status, search) is checked against github.owner/repo plus github.allowedRepos by exact case-insensitive match with no prefix matching, plus a host check against a separate github.htmlBaseUrl, before any fetch is issued. parseRepoFromUrl output is only ever compared, never interpolated into a request URL.",
+      "Prompt-size capping for diffs: maxRefs/maxFiles/maxPatchChars plus maxDiffChars as a budget across all refs (and across all tickets on the release tool). A hand-rolled patch deny-list drops lockfile/generated/binary patch bodies while keeping their line counts, tagged with patchOmittedReason so a policy omission is never mistaken for size-cap truncation. The prompt carries three separate notices — files not listed, patches cut short by the budget, patches withheld by policy — rather than one blanket sentence that would claim a complete two-file PR was \"not exhaustive\" merely because it touched a lockfile. PR/commit description bodies are capped the same way by maxBodyChars (default 4000, KAN-14): they reach the model verbatim on the MCP path, so they get an upper bound too. A cut body is counted in totals.truncatedBodies / codeChangesFacts.truncatedBodies and warned about via warnings[], and deliberately does NOT set the global truncated flag — that flag means diff content was withheld and drives a \"do not treat the file list as exhaustive\" instruction, which a cut description must not trigger. Bodies are not charged against github.js's remainingChars (a patch budget feeding the prompt, which bodies never enter) but ARE charged against ripple__get_release_context's cross-ticket budget (a total-context guard on one response that carries every ticket's bodies verbatim).",
+      "totals.filesChanged is taken from the PR's declared changed_files rather than the returned page length, so omittedFiles is not computed against an already-truncated number",
+      "codeChanges block threaded through the whole pipeline: SYSTEM_PROMPT rule F, buildUserPrompt, the conditional Code Changes section in formatMarkdown, aggregateReleaseAnalyses merge, and ripple__save_report validation",
+      "Code-owns-facts split: source/repo/refs/counts plus truncated/omittedFiles come from the real diff (codeChangesFacts) and are merged into a new object rather than transcribed by the model; the model supplies only modules and riskSignals. repo is derived from the refs that actually resolved, not the primary configured repo, so a ref legitimately fetched from an allowedRepos sibling is reported accurately. Enforced structurally on the CLI by withCodeChanges(), and instructionally on the MCP path via a copy-verbatim rule in SKILL.md, since ripple__save_report has no diff to re-derive from.",
+      "Empty-diff guard: codeChanges is dropped entirely when no ref resolved, so a run where the diff failed never renders an empty '## Code Changes' heading",
+      "Byte-parity guarantee for reports without a diff, enforced by golden fixtures generated from formatMarkdown before it was modified (tests/fixtures/golden/, tests/markdown-parity.test.js) plus the property formatMarkdown(a) === formatMarkdown with codeChanges undefined === formatMarkdown with codeChanges empty",
+      "Optional github config block, off by default: absent means the feature is simply unavailable and every pre-existing install behaves unchanged. When present, owner and repo are mandatory and allowedRepos entries are validated as exactly two segments, because they are the allowlist the whole trust boundary rests on.",
+      "github.tokenEnv (default GITHUB_TOKEN) so diff analysis can use a repo-scoped token separate from the models:read token GitHub Models needs; the 403 message names that scope collision explicitly rather than reporting a bare status code",
+      "node:test suite (npm test, 59 tests) covering the allowlist and host check, cascade precedence, ref-format validation on every discovery tier, capping and truncation-flag semantics, byte-parity, zod round-trip preservation, config validation, and the MCP error envelopes; npm run test:golden regenerates the byte-parity fixtures",
+      "--pr / --commit / --compare are mutually exclusive — passing two would silently merge unrelated changes into a single Code Changes section"
+    ]
+  },
+  "devTooling": {
+    "status": "shipped",
+    "note": "Repo-local workflow tooling, not product features — recorded because CLAUDE.md's process depends on it.",
+    "features": [
+      "Four custom Claude Code subagents in .claude/agents/ (software-architect, code-reviewer, code-fixer, security-auditor) implementing the plan-review / test / review / fix loop CLAUDE.md mandates",
+      "Plans stored under .claude/plan/ per CLAUDE.md",
+      "issues.md — running log of failures, incidents and blockers with their fixes"
+    ]
+  },
+  "knownGaps": [
+    {
+      "gap": "`--release <version>` never aggregates its per-ticket analyses",
+      "detail": "runAnalyze's release branch loops over the fixVersion's tickets and calls outputResult per ticket, producing N separate reports. aggregateReleaseAnalyses is reached only by the multi---ticket path and by ripple__aggregate_release_analysis. Consequence: `--release` and `--ticket A B C` behave differently for no documented reason, and `--release --diff` produces N per-ticket Code Changes sections rather than one merged view. The dead `if (!noLlm) {}` block that marked the intended aggregation point was removed during the 2026-09-07 review fixes and replaced with a comment pointing here; the behavioural gap itself is unchanged.",
+      "status": "unfixed — recorded during the 2026-09-07 audit; previously mis-recorded as working"
+    },
+    {
+      "gap": "CLI and MCP report filenames use different timestamp formats",
+      "detail": "The CLI writes `<key>-<full ISO timestamp with T and Z>.md` (analyze.js: `timestamp.replace(/[:.]/g, '-')`), while ripple__save_report writes `<key>-YYYY-MM-DD_HH-MM.md`. Both land in the same reports directory, so a directory of reports is inconsistently named depending on which surface produced it. Every file currently in ripple-reports/ uses the MCP format.",
+      "status": "unfixed — cosmetic, but the two surfaces are supposed to produce identical output"
+    }
+  ],
+  "planned": [
+    "Self healing test generation after recommendation",
+    "Test generation from Jira, Confluence and GitHub context (user provides a CSV template on first run)"
+  ],
+  "deferred": [
+    {
+      "feature": "scan_sprint / get_daily_digest MCP tools",
+      "reason": "No v1 precedent; would need a scheduling primitive the MCP server can't provide alone. Re-confirmed absent from mcp/src/tools/ in the 2026-09-07 audit (the directory holds exactly five tools, none of them these). Revisit as a separate roadmap conversation."
+    },
+    {
+      "feature": "Standalone whole-suite coverage-gap audit (independent of any ticket)",
+      "reason": "coverageGaps[] is still only produced as part of per-ticket analysis — confirmed in the 2026-09-07 audit against SYSTEM_PROMPT's schema (analyze.js) and analysisShape, which now lives in mcp/src/schemas/analysis.js rather than inline in save-report.js as previously recorded. Per resolved scope decision."
+    }
+  ]
+}

@@ -85,6 +85,37 @@ export function upstreamJiraError(err) {
   };
 }
 
+export function upstreamGitHubError(err) {
+  const message = redact(err instanceof Error ? err.message : String(err));
+
+  if (message.includes('rate limit')) {
+    return {
+      code: RippleErrorCode.UPSTREAM_ERROR,
+      message,
+      fix: 'Wait for the GitHub rate limit to reset, or set a token in the env var named by github.tokenEnv to raise the limit.',
+    };
+  }
+  if (message.includes('authentication failed') || message.includes('access was denied')) {
+    return {
+      code: RippleErrorCode.AUTH_FAILED,
+      message,
+      fix: 'Check the token named by github.tokenEnv (default GITHUB_TOKEN). A token scoped only for GitHub Models will not grant repository access.',
+    };
+  }
+  if (message.includes('404')) {
+    return {
+      code: RippleErrorCode.UPSTREAM_ERROR,
+      message,
+      fix: 'Check github.owner/github.repo in ripple.config.json and that the token can read that repository.',
+    };
+  }
+  return {
+    code: RippleErrorCode.UPSTREAM_ERROR,
+    message,
+    fix: 'Retry the request; if it persists, check GitHub status and github.apiBaseUrl in ripple.config.json.',
+  };
+}
+
 export function upstreamConfluenceError(err) {
   const message = redact(err instanceof Error ? err.message : String(err));
   if (message.includes('authentication failed')) {

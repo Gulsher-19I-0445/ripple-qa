@@ -2,36 +2,9 @@ import { z } from 'zod';
 import { authGate } from '../auth.js';
 import { fail, ok } from '../response.js';
 import { internalError } from '../errors.js';
+import { analysisShape } from '../schemas/analysis.js';
 
 export const TOOL_NAME = 'ripple__aggregate_release_analysis';
-
-const impactedAreaShape = z.object({ area: z.string(), reason: z.string(), confidence: z.string() });
-const recommendedTestShape = z.object({
-  name: z.string(),
-  area: z.string(),
-  priority: z.string(),
-  reason: z.string(),
-});
-const coverageGapShape = z.object({ description: z.string(), suggestedTestCase: z.string() });
-const contextSourcesShape = z
-  .object({
-    wikiPagesUsed: z.array(z.string()).optional(),
-    testCasesEvaluated: z.number().optional(),
-    testCasesRecommended: z.number().optional(),
-  })
-  .optional();
-
-const analysisShape = z.object({
-  ticketKey: z.string().min(1),
-  summary: z.string(),
-  riskLevel: z.enum(['HIGH', 'MEDIUM', 'LOW']),
-  riskReason: z.string(),
-  primaryFeature: z.string(),
-  impactedAreas: z.array(impactedAreaShape).optional(),
-  recommendedTests: z.array(recommendedTestShape).optional(),
-  coverageGaps: z.array(coverageGapShape).optional(),
-  contextSources: contextSourcesShape,
-});
 
 export const aggregateReleaseAnalysisInputShape = {
   analyses: z
