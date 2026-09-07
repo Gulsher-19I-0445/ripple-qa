@@ -19,6 +19,11 @@ import {
   handleAggregateReleaseAnalysis,
 } from './tools/aggregate-release-analysis.js';
 import {
+  TOOL_NAME as GET_DIFF_CONTEXT_NAME,
+  getDiffContextInputShape,
+  handleGetDiffContext,
+} from './tools/get-diff-context.js';
+import {
   TOOL_NAME as SAVE_REPORT_NAME,
   saveReportInputShape,
   handleSaveReport,
@@ -60,6 +65,18 @@ const TOOLS = [
       'deduplicated. Deterministic — use this instead of merging the analyses yourself.',
     shape: aggregateReleaseAnalysisInputShape,
     handler: handleAggregateReleaseAnalysis,
+  },
+  {
+    name: GET_DIFF_CONTEXT_NAME,
+    description:
+      'Fetches the code changes (pull requests / commits) behind a Jira ticket from GitHub: '  +
+      'ref metadata, per-file add/delete counts, and capped patch bodies. Resolves the change '  +
+      'by explicit pr/commit/compare, else the Jira development panel, else a GitHub search for '  +
+      'the ticket key. The repository is fixed by ripple.config.json and cannot be chosen by the '  +
+      'caller. Data only — it does not analyze impact; copy the returned codeChangesFacts object '  +
+      'verbatim into your analysis JSON rather than retyping its values.',
+    shape: getDiffContextInputShape,
+    handler: handleGetDiffContext,
   },
   {
     name: SAVE_REPORT_NAME,

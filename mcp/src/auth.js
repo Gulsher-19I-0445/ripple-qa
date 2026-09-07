@@ -7,7 +7,10 @@ import { fail } from './response.js';
 // of the orphaned scaffold's flat 5-env-var model, which conflated the two.
 // loadConfig() already validates JIRA_API_TOKEN + ripple.config.json; we only
 // need to additionally check CONFLUENCE_API_TOKEN, which it doesn't cover.
-export function authGate(toolName) {
+// requireConfluence is opt-out for one caller: ripple__get_diff_context needs
+// Jira + GitHub but never touches Confluence, and hard-requiring the Confluence
+// token there would lock out an operator who simply doesn't use Confluence.
+export function authGate(toolName, { requireConfluence = true } = {}) {
   let config;
   try {
     config = loadConfig();
@@ -15,7 +18,7 @@ export function authGate(toolName) {
     return { error: fail(toolName, configError(err.message)), config: null };
   }
 
-  if (!process.env.CONFLUENCE_API_TOKEN?.trim()) {
+  if (requireConfluence && !process.env.CONFLUENCE_API_TOKEN?.trim()) {
     return { error: fail(toolName, missingEnvVarError(['CONFLUENCE_API_TOKEN'])), config: null };
   }
 

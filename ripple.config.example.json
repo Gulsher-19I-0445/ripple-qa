@@ -17,6 +17,18 @@
       "priority": "Priority"
     }
   },
+  "github": {
+    "owner": "your-org",
+    "repo": "your-repo",
+    "apiBaseUrl": "https://api.github.com",
+    "htmlBaseUrl": "https://github.com",
+    "tokenEnv": "GITHUB_TOKEN",
+    "allowedRepos": [],
+    "maxRefs": 5,
+    "maxFiles": 50,
+    "maxPatchChars": 4000,
+    "maxDiffChars": 60000
+  },
   "llm": {
     "provider": "claude",
     "model": "claude-sonnet-4-6"

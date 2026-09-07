@@ -10,3 +10,4 @@ regression.csv
 ripple-reports/
 .claude/agent-memory/
 .claude/agents/
+tests/fixtures/golden/

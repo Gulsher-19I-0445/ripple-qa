@@ -19,6 +19,15 @@ export const getReleaseContextInputShape = {
   releaseVersion: z.string().min(1).describe('Jira fixVersion name, e.g. v2.4.1'),
   testSuitePath: z.string().optional(),
   columns: columnsShape,
+  includeDiff: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe(
+      'Also fetch GitHub code changes per ticket. Off by default: this tool returns every ' +
+        "ticket in one response, so diffs are budgeted across the whole release rather than " +
+        'per ticket.'
+    ),
 };
 
 export async function handleGetReleaseContext(input) {
@@ -50,12 +59,29 @@ export async function handleGetReleaseContext(input) {
   // gathers N tickets' raw context, it does not aggregate N *analyses* (that
   // requires reasoning output that doesn't exist until the calling model
   // produces it — see ripple__aggregate_release_analysis for that step).
+  // The whole release comes back in a single response, so an unbudgeted
+  // includeDiff would put N x maxDiffChars into the caller's context at once
+  // (30 tickets x 60000 chars is ~1.8MB). Budget across the release instead:
+  // once it is spent, later tickets degrade to counts-only.
+  const releaseBudget = config.github?.maxDiffChars ?? 60000;
+  let remainingBudget = releaseBudget;
+
   for (const key of ticketKeys) {
     const result = await handleGetTicketContext({
       ticketId: key,
       testSuitePath: input.testSuitePath,
       columns: input.columns,
+      includeDiff: input.includeDiff,
+      ...(input.includeDiff ? { diffCharBudget: Math.max(remainingBudget, 0) } : {}),
     });
+
+    if (input.includeDiff && result.success) {
+      const spent = (result.data.diffContext?.files ?? []).reduce(
+        (sum, file) => sum + (file.patch?.length ?? 0),
+        0
+      );
+      remainingBudget -= spent;
+    }
     if (result.success) {
       tickets.push(result.data);
     } else {
