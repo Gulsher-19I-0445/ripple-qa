@@ -385,3 +385,15 @@ endings before matching.
 **Known gap (out of scope, pre-existing).** `mcp/src/env.js` calls `process.chdir` on
 `RIPPLE_PROJECT_ROOT` without checking it exists, so a nonexistent root prints a raw stack trace
 instead of a friendly error. The CI `package` job creates the directory first.
+
+**Code review round (same day).** The code-reviewer found two blockers in `release.yml`
+(`.claude/plan/ci-and-npm-release-REVIEW.md`): BL-1 — the release job never ran `npm ci`, so the
+new `prepublishOnly: npm test` hook would have failed every publish, dry runs included; BL-2 — the
+tag-cleanup step fired on *any* later failure, so a flaky `gh release create` after a successful
+publish would have deleted the tag of a live npm version. Both fixed (`c3835c7`, `aa8b212`); the
+cleanup is now gated on `steps.publish.outcome == 'failure'` while keeping `failure()` in the
+condition, because a step `if:` with no status function gets an implicit `success()` and would
+never run. Also fixed: job-id regex in `tests/ci-config.test.js` missed digits/underscores
+(WR-1), README now states the deploy key bypasses the whole ruleset and must live only in the
+secret (WR-2), and the npm-version step asserts the ≥ 11.5.1 floor instead of printing it (NIT).
+Suite is 92 tests after the round.
