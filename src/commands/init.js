@@ -2,6 +2,8 @@ import { writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { input, select, confirm } from '@inquirer/prompts';
 import chalk from 'chalk';
+import { writeHostWiring } from '../hosts.js';
+import { ensureMcpDeps, printWiringResult, printWiringError, printHostNextSteps } from './mcp-setup.js';
 
 const GITHUB_MODELS = [
   { name: 'gpt-4o (recommended)', value: 'gpt-4o' },
@@ -243,6 +245,17 @@ export async function runInit() {
     console.log(chalk.green('Created .env.example'));
   }
 
+  // Without this, no host CLI ever learns the MCP server exists: nothing else
+  // writes .mcp.json or the skill copies into the user's project.
+  const wireHosts = await confirm({
+    message:
+      'Set up /ripple for AI coding agents (Claude Code, Copilot CLI, Antigravity, OpenCode)? ' +
+      'Writes .mcp.json and skill files here.',
+    default: true,
+  });
+
+  const { wired: hostsWired } = wireHosts ? await wireHostsForProject(process.cwd()) : { wired: false };
+
   console.log(chalk.cyan('\nNext steps:'));
   if (llmProvider === 'ollama') {
     console.log('  1. Make sure Ollama is running: ' + chalk.white('ollama serve'));
@@ -255,7 +268,44 @@ export async function runInit() {
     }
   }
   console.log('  ' + (llmProvider === 'ollama' ? '3' : '2') + '. Run: ' + chalk.white(`ripple analyze --ticket ${projectKey.trim().toUpperCase()}-1234`));
+  if (hostsWired) {
+    printHostNextSteps(projectKey.trim().toUpperCase());
+  } else {
+    console.log(chalk.gray('  (Run "ripple mcp-setup" later to enable /ripple inside Claude Code and other agents.)'));
+  }
   console.log('');
+}
+
+/**
+ * The host-wiring step of `ripple init`: installs MCP server deps if needed and
+ * writes the skill copies + MCP configs into targetDir, printing progress.
+ *
+ * Never throws. By the time this runs ripple.config.json and .env.example are
+ * already on disk and useful on their own, so any failure here (a teammate's
+ * malformed .mcp.json, a permissions error on one of the target dirs, a
+ * read-only global node_modules) is reported as a friendly message that points
+ * at `ripple mcp-setup` for recovery — not a stack trace that undoes the wizard.
+ *
+ * Returns { wired: boolean } so the caller can pick the right "Next steps".
+ */
+export async function wireHostsForProject(targetDir) {
+  try {
+    await ensureMcpDeps();
+  } catch (err) {
+    console.log(chalk.yellow(`\nCould not install MCP server dependencies: ${err.message}`));
+    console.log(chalk.yellow('Re-run "ripple mcp-setup" with sufficient permissions before using /ripple.'));
+  }
+
+  try {
+    console.log('');
+    const result = writeHostWiring(targetDir);
+    printWiringResult(result);
+    return { wired: true };
+  } catch (err) {
+    printWiringError(err);
+    console.log(chalk.yellow('\nYour ripple.config.json is fine — fix the issue above and run "ripple mcp-setup".'));
+    return { wired: false };
+  }
 }
 
 function buildEnvExample(provider, customKeyEnv, withGithubDiff = false) {

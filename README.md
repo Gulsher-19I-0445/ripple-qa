@@ -26,6 +26,9 @@ cp .env.example .env
 ripple analyze --ticket PROJ-1234
 ```
 
+Answering **yes** to the wizard's last question also wires `/ripple` into your AI coding agent —
+see [Using /ripple inside Claude Code and other agents](#using-ripple-inside-claude-code-and-other-agents).
+
 ---
 
 ## Example Output
@@ -138,6 +141,46 @@ warning, not an error — the analysis continues without it.
 > scopes conflict, point the diff feature at a second token with
 > `"tokenEnv": "GITHUB_REPO_TOKEN"`. A token is optional for public repositories, though
 > unauthenticated requests are limited to 60/hour.
+
+---
+
+## Using /ripple inside Claude Code and other agents
+
+Ripple ships an MCP server plus a Skill so the analysis can run inside your agent session, using
+whatever model that session is on — the server only fetches Jira / Confluence / test-suite / GitHub
+data and never calls an LLM itself.
+
+`ripple init` asks whether to set this up (default yes). To do it later, or to re-wire after
+moving the install:
+
+```bash
+ripple mcp-setup
+```
+
+Either path writes, into the current directory:
+
+| File | Read by |
+|------|---------|
+| `.mcp.json` | Claude Code, GitHub Copilot CLI |
+| `.agents/mcp_config.json` | Antigravity CLI |
+| `.claude/skills/ripple/SKILL.md` | Claude Code, GitHub Copilot CLI |
+| `.agents/skills/ripple/SKILL.md` | Antigravity CLI, GitHub Copilot CLI |
+| `.github/skills/ripple/SKILL.md` | GitHub Copilot CLI |
+| `.opencode/skills/ripple/SKILL.md` | OpenCode |
+
+Then restart your agent session in that directory, approve the `ripple` server when Claude Code
+asks (it prompts once for project-scoped servers), and run:
+
+```
+/ripple analyze PROJ-1234
+/ripple analyze PROJ-1234 --diff
+/ripple analyze --release v2.4.1
+```
+
+The two MCP config files point at *this machine's* ripple install (an absolute path) and pin the
+project root via `RIPPLE_PROJECT_ROOT`, so they are machine-specific. Existing entries for other
+servers in `.mcp.json` are preserved. Teammates run `ripple mcp-setup` once in their own
+checkout; the skill copies are safe to commit.
 
 ---
 

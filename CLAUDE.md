@@ -16,7 +16,7 @@ test cases — just impact analysis and test selection from existing suites.
 
 ## Project structure
 Follow the structure in the architecture exactly:
-bin/, src/commands/, src/sources/, src/llm/, src/output/, src/config.js
+bin/, src/commands/, src/sources/, src/llm/, src/output/, src/config.js, src/hosts.js
 
 ## Code style
 - ES module imports only (import, not require)
@@ -67,7 +67,7 @@ A tool that you can call inside claude using /ripple <command>. It supports all 
 
 ## Stack
 - Node.js with ES Modules (type: module in package.json) — no CommonJS require()
-- `mcp/` has its own `package.json` (`@modelcontextprotocol/sdk`, `zod`, `dotenv`) since it dynamically imports v1's `src/` at runtime rather than depending on it as a package
+- The MCP server's dependencies (`@modelcontextprotocol/sdk`, `zod`, `dotenv`) are declared in the **root** `package.json` — that is what makes `npm i -g ripple-qa` yield a runnable server, since `mcp/src/*.js` resolves upward into the package root's `node_modules`. `mcp/package.json` mirrors those ranges (pinned by `tests/host-sync.test.js`) so the server can also be run standalone; the dev checkout should not have a `mcp/node_modules` (two zod instances would feed `z.object(shape)`). `mcp/` still dynamically imports v1's `src/` at runtime rather than depending on it as a package
 
 ## Code style
 - ES module imports only (import, not require)
@@ -83,6 +83,7 @@ A tool that you can call inside claude using /ripple <command>. It supports all 
 ## Config and secrets
 - The MCP server loads the project's existing root `.env` itself at startup (`mcp/src/env.js`) using the same `JIRA_API_TOKEN`/`CONFLUENCE_API_TOKEN` v1's CLI already uses — no new secrets, no new env vars.
 - `.mcp.json` (committed, no secrets) only declares `command`/`args`/`cwd` to launch `node mcp/src/index.js`. Nothing secret-shaped needs to live in host config across Claude Code / Copilot CLI / Antigravity.
+- User projects get their wiring from `ripple init` (opt-out confirm) or `ripple mcp-setup`, both of which call `writeHostWiring()` in `src/hosts.js`: it copies `skills/ripple/SKILL.md` to every host's skill path and merges a `ripple` entry (absolute server path + `RIPPLE_PROJECT_ROOT`, other servers preserved) into every host's MCP config. Those generated files are machine-specific by nature; the repo's own copies stay relative and come only from `npm run sync:agents` — `writeHostWiring` refuses to run inside the package itself.
 - `JIRA_URL`/`JIRA_EMAIL`/`CONFLUENCE_URL`/`spaceKey`/`projectKey` still come from `ripple.config.json` via `loadConfig()`, unchanged.
 - `RIPPLE_PROJECT_ROOT` env var (optional) pins the project root if a host spawns the server with an unexpected `cwd`.
 - The API-fetching path above stays the primary/default across all hosts for consistency; see `feature_list.json` for planned alternatives.
@@ -97,6 +98,7 @@ A tool that you can call inside claude using /ripple <command>. It supports all 
 - LLM returning invalid JSON: retry once, then throw descriptive error (v1 CLI path only — the MCP/Skill path validates the model's analysis JSON structurally in `ripple__save_report` instead, since there's no raw LLM response to retry)
 
 ## Multi-host skill/MCP-config sync
+- `src/hosts.js` holds the per-host target path lists (`SKILL_TARGETS`, `MCP_CONFIG_TARGETS`) used by both the sync script and the runtime writer; `tests/host-sync.test.js` fails if a committed copy drifts from its canonical source.
 - `skills/ripple/SKILL.md` and `mcp/mcp-config.json` are the single source of truth — never
   hand-edit `.claude/skills/ripple/SKILL.md`, `.agents/skills/ripple/SKILL.md`,
   `.github/skills/ripple/SKILL.md`, `.opencode/skills/ripple/SKILL.md`, `.mcp.json`, or
@@ -106,18 +108,18 @@ A tool that you can call inside claude using /ripple <command>. It supports all 
   Claude Code: `.claude/skills/*`, `.mcp.json`; Antigravity CLI: `.agents/skills/*`,
   `.agents/mcp_config.json`; OpenCode: `.opencode/skills/*`; GitHub Copilot CLI reads
   `.github/skills`, `.claude/skills`, `.agents/skills`, and `.mcp.json`). Run it after editing the
-  canonical source, and add a new host by adding one line to the `skillTargets`/`mcpConfigTargets`
-  arrays in the script rather than hand-copying files.
+  canonical source, and add a new host by adding one line to the `SKILL_TARGETS`/`MCP_CONFIG_TARGETS`
+  arrays in `src/hosts.js` rather than hand-copying files.
 
 See `feature_list.json` for the current feature set and roadmap, and `progress_logs.json` for decision history.
 
 
 ## Instructions
 - Before implementing any feature come up with a plan in plan mode. All plans must be stored under .claude/plan/.
-- Once plan is ready ask the software-architect subagent to review the plan. Based on the suggestions from architect, update the plan. Keep iterating until plan is approved from architect
+- Once plan is ready ask the software-architect subagent to review the plan. Based on the suggestions from architect, update the plan.
 - Before implementing any feature identify test scenarios(unit tests, e2e tests, and goals/deliverable).
 - When implementing trying using existing libraries and frameworks. Unless absolutely necessary do not reinvent the wheel
 - Incase of a failure fix the defect and rerun test until all tests are passed.
-- Once tests are passed run the code-reviewer subagent. Once done call the code-fixer agent and tell it the feature and it will fix. Keep iterating untill all issues are resolved
+- Once tests are passed run the code-reviewer subagent. Once done call the code-fixer agent and tell it the feature and it will fix.
 - Document every failure, incident or blocker in issues.md. Everytime the incident occur it must be documented and if fixed fix should also be documented
 - Once a feature is complete update progress_logs.json and feature_list.json

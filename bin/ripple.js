@@ -40,7 +40,7 @@ program
 
 program
   .command('mcp-setup')
-  .description('Install dependencies for the MCP server (enables /ripple in Claude Code, Copilot CLI, etc.)')
+  .description('Wire the ripple MCP server and /ripple skill into this project (writes .mcp.json + skill files for Claude Code, Copilot CLI, Antigravity, OpenCode)')
   .action(runMcpSetup);
 
 program.parse();

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { z } from '../mcp/node_modules/zod/index.js';
+import { z } from 'zod';
 import { saveReportInputShape } from '../mcp/src/tools/save-report.js';
 import { aggregateReleaseAnalysisInputShape } from '../mcp/src/tools/aggregate-release-analysis.js';
 
