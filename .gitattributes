@@ -1,0 +1,3 @@
+# Byte-parity golden fixtures are compared byte-for-byte by tests/markdown-parity.test.js.
+# Keep them LF on every platform (core.autocrlf would otherwise CRLF-convert them on Windows).
+tests/fixtures/golden/*.md text eol=lf

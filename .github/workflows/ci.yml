@@ -1,0 +1,83 @@
+# Merge gate for master. The single check branch protection requires is the
+# aggregate `ci-ok` job (see .github/rulesets/master.json) so the matrix can
+# change without touching the ruleset. Also reused by release.yml via workflow_call.
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Superseded PR pushes are cancelled; master runs (and the Release's reusable call) never are.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: test (${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  # Proves what `npm i -g ripple-qa` actually yields: the `files` allowlist is complete,
+  # the CLI runs, and the MCP server resolves its deps from the package root's node_modules.
+  package:
+    name: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Pack and install the tarball globally
+        run: |
+          npm pack
+          npm install -g ./ripple-qa-*.tgz
+      - name: CLI runs from the global install
+        run: |
+          expected="$(node -p "require('./package.json').version")"
+          actual="$(ripple --version)"
+          echo "ripple --version -> $actual (package.json: $expected)"
+          test "$actual" = "$expected"
+      - name: MCP server starts from the global install
+        env:
+          RIPPLE_PROJECT_ROOT: ${{ runner.temp }}/empty-project
+        run: |
+          mkdir -p "$RIPPLE_PROJECT_ROOT"
+          server="$(npm root -g)/ripple-qa/mcp/src/index.js"
+          test -f "$server"
+          # stdin at EOF makes the server exit on its own; timeout is the hang guard.
+          out="$(timeout 10s node "$server" </dev/null 2>&1 || true)"
+          echo "$out"
+          echo "$out" | grep -q "server started"
+
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [test, package]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All required jobs succeeded
+        run: |
+          echo "test: ${{ needs.test.result }}"
+          echo "package: ${{ needs.package.result }}"
+          test "${{ needs.test.result }}" = "success"
+          test "${{ needs.package.result }}" = "success"

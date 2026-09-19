@@ -31,7 +31,7 @@
   ],
   "type": "module",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
     "start": "node bin/ripple.js",
@@ -39,7 +39,8 @@
     "audit": "npm audit --audit-level=high",
     "mcp": "node mcp/src/index.js",
     "sync:agents": "node scripts/sync-agents.mjs",
-    "test": "node --test \"tests/**/*.test.js\"",
+    "test": "node --test",
+    "prepublishOnly": "npm test",
     "test:golden": "node tests/fixtures/generate-golden.mjs"
   },
   "dependencies": {
