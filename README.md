@@ -364,8 +364,11 @@ push and publish, and can be run from any branch.
 - Wait for a running Release to finish before dispatching another. A queued second run checks out
   its own dispatch-time commit and will (correctly) fail when it tries to push.
 - The workflow pushes **before** it publishes, because publishing is the only irreversible step. If
-  the publish fails after the push landed, the tag is removed automatically but the version-bump
-  commit stays on `master`; fix the cause and dispatch again (that run bumps once more).
+  the publish itself fails after the push landed, the tag is removed automatically but the
+  version-bump commit stays on `master`; fix the cause and dispatch again (that run bumps once
+  more). The cleanup only runs when the publish step failed: if `gh release create` fails after a
+  successful publish, the version is live on npm and the tag is left in place — create the GitHub
+  Release by hand from that tag.
 - The provenance attestation references the commit the workflow was dispatched from (the one
   before the version bump). That is inherent to bumping inside the workflow and is fine for
   `npm audit signatures`.

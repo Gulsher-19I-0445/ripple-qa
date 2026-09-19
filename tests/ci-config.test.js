@@ -64,6 +64,15 @@ test('release.yml pushes the version commit before it publishes', () => {
   const publish = releaseYaml.indexOf('npm publish');
   assert.ok(push > 0 && publish > 0);
   assert.ok(push < publish, 'publishing is irreversible; a rejected push must cost nothing');
+  // The tag cleanup must key off the publish step, not job-wide failure(): a failed
+  // `gh release create` after a successful publish must not delete the tag of a live version.
+  assert.match(releaseYaml, /^      - name: Publish to npm\n        id: publish$/m, 'publish step needs an id for the cleanup guard');
+  const cleanup = releaseYaml.match(/^      - name: Remove tag after a failed publish\n        if: (.+)$/m);
+  assert.ok(cleanup, 'release.yml must have the tag cleanup step');
+  assert.ok(cleanup[1].includes("steps.publish.outcome == 'failure'"), 'cleanup must be gated on the publish step failing');
+  // Without a status-check function GitHub prepends an implicit success(), and the step would
+  // silently never run after a failure.
+  assert.match(cleanup[1], /\b(failure|always)\(\)/, 'cleanup needs failure() or always() to run at all after a failed step');
 });
 
 test('the golden fixtures are tracked and pinned to LF', () => {

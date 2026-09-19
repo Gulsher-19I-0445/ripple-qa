@@ -88,6 +88,7 @@ jobs:
         run: git push --atomic origin HEAD:master "refs/tags/v${{ steps.bump.outputs.version }}"
 
       - name: Publish to npm
+        id: publish
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             npm publish --access public --dry-run
@@ -101,11 +102,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "v${{ steps.bump.outputs.version }}" --generate-notes --verify-tag
 
-      # If publish (or the release) failed after the push landed, remove the tag so a retry's
+      # Only when the publish itself failed after the push landed: remove the tag so a retry's
       # --verify-tag cannot pick up a tag with no package behind it. The version commit stays
       # on master; recovery is "fix the cause, dispatch again" (which bumps once more).
+      # Deliberately NOT bare failure(): if `gh release create` fails after a successful publish,
+      # the version is live on npm and the tag must stay — create the Release by hand from the
+      # existing tag instead. failure() is still needed as the status function: without one,
+      # GitHub prepends an implicit success() and the step would never run after a failure.
       - name: Remove tag after a failed publish
-        if: ${{ failure() && steps.push.outcome == 'success' }}
+        if: ${{ failure() && steps.push.outcome == 'success' && steps.publish.outcome == 'failure' }}
         run: git push --delete origin "refs/tags/v${{ steps.bump.outputs.version }}"
 
       - name: Summary
