@@ -255,3 +255,76 @@ design: `github.js:6-9` forbids the module from printing, so `fetchDiffContext` 
 
 **Out of scope, follow-up worth filing.** `refs[].title` is also uncapped and *does* reach the
 prompt (a commit title is the first line of a commit message, which has no enforced length).
+
+---
+
+## 2026-09-19 — `ripple init` never wires the MCP server into the project
+
+**Status:** resolved
+**Area:** `src/commands/init.js`, `src/commands/mcp-setup.js`, packaging
+
+**What happened.** Reported in the `bug` note (2026-09-08): after `ripple init` in a fresh
+directory, Claude Code (and every other supported host) never picked up the ripple MCP server or
+the `/ripple` skill. `init` only ever wrote `ripple.config.json` and `.env.example`; `mcp-setup`
+ran `npm install` inside the package's own `mcp/` and printed a `.mcp.json` snippet to paste by
+hand. Nothing wrote `.mcp.json` or a skill copy into the user's project, so no host had anything
+to launch or load.
+
+**Cause.** Three gaps compounded:
+1. No code path wrote host wiring into the *target* project — the only fan-out that existed
+   (`scripts/sync-agents.mjs`) writes the repo's own committed copies and is not shipped.
+2. `package.json#files` excluded `skills/`, so an npm-installed ripple had no `SKILL.md` to copy
+   even if `init` had wanted to.
+3. The MCP server's dependencies lived only in the nested `mcp/package.json`, which npm does not
+   install for a nested manifest — `mcp/src/index.js` could not import
+   `@modelcontextprotocol/sdk` on a fresh `npm i -g ripple-qa` without the manual `mcp-setup`
+   step.
+
+**Fix.**
+- New `src/hosts.js` (shipped) holds the per-host target lists and `writeHostWiring(targetDir)`,
+  which copies `skills/ripple/SKILL.md` to every host's skill path and merges a `ripple` entry
+  (`node <absolute server path>` + `env.RIPPLE_PROJECT_ROOT=<project>`) into `.mcp.json` and
+  `.agents/mcp_config.json`, preserving other servers. It refuses to run inside the ripple-qa
+  package itself so the repo's committed, relative copies can never be overwritten with
+  machine-specific paths.
+- `ripple init` now asks (default yes) whether to wire hosts and does so; `ripple mcp-setup`
+  writes the same files instead of printing a snippet. Both print per-file
+  created/updated/unchanged status and the restart / approve / `/ripple` next steps.
+- `skills/` added to `files`; `@modelcontextprotocol/sdk` and `zod` added to the root
+  `dependencies` so a global install has a runnable server. `ensureMcpDeps()` now probes the
+  specifiers the server actually imports and only falls back to `npm install` in `mcp/` when they
+  do not resolve; `init` downgrades a failed install to a warning rather than losing the config it
+  just wrote.
+- `scripts/sync-agents.mjs` imports the target lists from `src/hosts.js`.
+
+**Verification.** `tests/host-wiring.test.js` covers the writer (merge, idempotence, malformed
+input, broken install, checkout guard, no-console.log) and an end-to-end case that spawns the real
+server via the MCP SDK client from the generated `.mcp.json`, with a sentinel config error that
+can only be reported if the server resolved the *temp* project (not its spawn cwd) as root.
+`tests/host-sync.test.js` pins the repo's committed copies to their canonical sources and the
+committed `.mcp.json` to being machine-independent. Manually: `ripple mcp-setup` in a scratch
+directory, then `claude mcp list` there shows
+`ripple: node C:/.../mcp/src/index.js - ⏸ Pending approval` — discovery from the generated file
+confirmed; approval is the interactive one-time step the next-steps text describes. Suite: 78
+tests, all passing.
+
+**Incident during the fix.** The first pass at patching `init.js` via a shell heredoc silently
+skipped the middle replacement (the `\n` inside the anchor string was consumed by the heredoc), and
+the first README edit did not apply at all because the file uses CRLF line endings. Both were
+caught by post-edit greps rather than by tests; the README patch was redone CRLF-aware.
+
+**Code review round (same day).** Adversarial review found two blockers and five warnings
+(`.claude/plan/mcp-wiring-on-init-REVIEW.md`); the fixer's report is alongside it. CR-01 was real
+and reproduced: neither `runMcpSetup` nor the `init` wiring block caught `writeHostWiring` errors,
+so a trailing comma in a teammate's `.mcp.json` dumped a raw stack trace — fixed with the same
+try/catch → red message → `process.exit(1)` pattern the other commands use, plus
+`err.partialResult` so the files that *did* land are listed (WR-02). CR-02 was a false positive:
+the reviewer flagged the removal of two "keep iterating" clauses in CLAUDE.md's Instructions, but
+that edit was already present, uncommitted, before this work started and belongs to the user; it
+was left untouched. Also fixed: status-column misalignment from padding chalk-coloured strings
+(WR-01), a deps probe that could not tell a stray `mcp/node_modules` shadowing the root install
+from a healthy one (WR-03 — now refuses with a "delete mcp/node_modules" message when both exist;
+a nested-only install is still accepted because that is what the `npm install` fallback produces),
+a checkout guard that only matched the package root and not its subdirectories (WR-04), and zero
+test coverage of the init branch (WR-05 — extracted to `wireHostsForProject()` and tested against
+a malformed `.mcp.json`). Suite is 86 tests after the round.

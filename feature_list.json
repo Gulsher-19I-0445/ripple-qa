@@ -86,6 +86,11 @@
       "gap": "CLI and MCP report filenames use different timestamp formats",
       "detail": "The CLI writes `<key>-<full ISO timestamp with T and Z>.md` (analyze.js: `timestamp.replace(/[:.]/g, '-')`), while ripple__save_report writes `<key>-YYYY-MM-DD_HH-MM.md`. Both land in the same reports directory, so a directory of reports is inconsistently named depending on which surface produced it. Every file currently in ripple-reports/ uses the MCP format.",
       "status": "unfixed — cosmetic, but the two surfaces are supposed to produce identical output"
+    },
+    {
+      "gap": ".claude/commands/ripple.md is a Claude-Code-only slash command that neither sync-agents nor writeHostWiring produces",
+      "detail": "Claude Code exposes the `ripple` skill as /ripple on its own, so the command file is redundant with the skill and exists only in this repo (user projects wired by `ripple init` do not get it and do not need it). Candidate for removal; left in place because that is a separate decision from the 2026-09-19 wiring fix.",
+      "status": "unfixed — recorded during the 2026-09-19 architect review"
     }
   ],
   "planned": [
@@ -100,6 +105,27 @@
     {
       "feature": "Standalone whole-suite coverage-gap audit (independent of any ticket)",
       "reason": "coverageGaps[] is still only produced as part of per-ticket analysis — confirmed in the 2026-09-07 audit against SYSTEM_PROMPT's schema (analyze.js) and analysisShape, which now lives in mcp/src/schemas/analysis.js rather than inline in save-report.js as previously recorded. Per resolved scope decision."
+    },
+    {
+      "feature": "Committable, machine-independent host MCP config (e.g. `cmd /c ripple mcp` per OS, or npx)",
+      "reason": "Rejected for v2.2. `ripple` is a .cmd shim on Windows so Claude Code / Copilot CLI need `cmd /c`; npx is slow and network-touching with the same problem; and a `ripple mcp` subcommand would load the host cwd's .env through bin/ripple.js's top-level `import 'dotenv/config'` before mcp/src/env.js could chdir to RIPPLE_PROJECT_ROOT. Absolute path + RIPPLE_PROJECT_ROOT is correct today; revisit if per-machine .mcp.json becomes a real friction point."
     }
-  ]
+  ],
+  "v2.2": {
+    "status": "shipped",
+    "summary": "Host wiring on init — `ripple init` / `ripple mcp-setup` write the MCP config and skill copies into the user's project so Claude Code, GitHub Copilot CLI, Antigravity CLI and OpenCode actually discover the ripple server. Fixes the bug where init produced only ripple.config.json + .env.example.",
+    "features": [
+      "src/hosts.js (shipped) — SKILL_TARGETS / MCP_CONFIG_TARGETS per-host path lists (single source of truth for both scripts/sync-agents.mjs and the runtime writer) plus writeHostWiring(targetDir, { packageRoot }): copies skills/ripple/SKILL.md to every host skill path and merges a `ripple` entry into every host MCP config, returning { serverPath, files: [{ path, status: created|updated|unchanged }] }",
+      "Generated MCP entry is `node <absolute mcp/src/index.js>` with env.RIPPLE_PROJECT_ROOT=<absolute project dir>, forward-slash normalised. Absolute because the server lives wherever npm put the package; RIPPLE_PROJECT_ROOT because only Claude Code is known to spawn project-scoped servers with the project as cwd and mcp/src/env.js already honours it. Consequence: the generated files are machine-specific and teammates re-run `ripple mcp-setup`; the command output and README say so",
+      "Merge semantics for existing .mcp.json / .agents/mcp_config.json: other servers preserved, a stale `ripple` entry replaced, 0-byte file treated as {}, missing mcpServers created; invalid JSON or a non-object mcpServers throws a descriptive error naming the file (no SyntaxError leak). Output is JSON.stringify(…, null, 2) + newline so a re-run is byte-idempotent",
+      "Checkout guard: writeHostWiring throws when targetDir is the ripple-qa package itself, so the repo's committed, relative .mcp.json / .agents/mcp_config.json (owned by npm run sync:agents) can never be overwritten with absolute paths by running the wizard in the checkout",
+      "`ripple init` gains one confirm (default yes) after writing config: wire hosts or not. On yes it runs ensureMcpDeps() (failure downgraded to a yellow warning pointing at `ripple mcp-setup`, never losing the config just written) then writeHostWiring(cwd), prints per-file status, and appends restart / approve-the-server / `/ripple analyze <KEY>` next steps",
+      "`ripple mcp-setup` now writes the wiring (same writer) instead of printing a .mcp.json snippet to paste by hand; it remains the non-interactive / re-wire path",
+      "ensureMcpDeps({ mcpDir }) probes the specifiers the server actually imports (@modelcontextprotocol/sdk/server/mcp.js, zod) via createRequire(mcp/src/index.js) — not the SDK's package.json, which only resolves by accident through its `./*` exports pattern — and only falls back to `npm install --omit=dev` in mcp/ when they do not resolve",
+      "Packaging: skills/ added to package.json#files (the skill was never shipped); @modelcontextprotocol/sdk and zod added to the ROOT dependencies so `npm i -g ripple-qa` yields a runnable server via upward module resolution. mcp/package.json stays for standalone use and its ranges are pinned to the root's by tests/host-sync.test.js; the dev checkout no longer keeps a mcp/node_modules (tests/mcp-schema.test.js imports bare `zod` so only one zod instance feeds z.object(shape))",
+      "tests/host-wiring.test.js (9 tests): writer contract, merge/idempotence, malformed input, broken install, checkout guard, library-code no-console.log enforcement, deps probe, and an END-TO-END case that spawns the real server through the MCP SDK Client from the generated .mcp.json entry with a sentinel config error (github.owner without github.repo) that can only be reported if the server resolved the temp project — not its spawn cwd — as root. tests/host-sync.test.js (4 tests) pins the repo's committed per-host copies to their canonical sources and the committed .mcp.json to being machine-independent. Suite is 86 tests",
+      "README section \"Using /ripple inside Claude Code and other agents\" with the per-host file table; CLAUDE.md structure list, Stack, Config and secrets, and Multi-host sync sections updated",
+      "Command-boundary error handling: runMcpSetup and the init wiring helper wireHostsForProject() never surface a stack trace — writeHostWiring attaches err.partialResult so a failure partway through the six target files still reports which ones landed; mcpDepsResolvable refuses a stray mcp/node_modules that shadows the root install (two zod instances) with a delete-and-rerun message; the checkout guard covers subdirectories of the package (running the wizard from mcp/ is refused)"
+    ]
+  }
 }

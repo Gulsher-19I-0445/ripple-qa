@@ -6,23 +6,19 @@
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SKILL_TARGETS, MCP_CONFIG_TARGETS } from '../src/hosts.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const canonicalSkill = join(root, 'skills/ripple/SKILL.md');
 const canonicalMcpConfig = join(root, 'mcp/mcp-config.json');
 
-const skillTargets = [
-  '.claude/skills/ripple/SKILL.md',   // Claude Code (also read by GitHub Copilot CLI)
-  '.agents/skills/ripple/SKILL.md',   // Antigravity CLI (workspace-level; also read by GitHub Copilot CLI)
-  '.github/skills/ripple/SKILL.md',   // GitHub Copilot CLI's primary repo-level skills dir
-  '.opencode/skills/ripple/SKILL.md', // OpenCode
-];
-
-const mcpConfigTargets = [
-  '.mcp.json',                 // Claude Code and GitHub Copilot CLI (project-level, takes precedence over ~/.copilot/mcp-config.json)
-  '.agents/mcp_config.json',   // Antigravity CLI (workspace-level)
-];
+// Target paths live in src/hosts.js so `ripple init` / `ripple mcp-setup` write
+// the same layout into user projects. This script copies the repo's RELATIVE
+// mcp/mcp-config.json bytes; the runtime writer generates machine-specific
+// absolute paths instead, which is why the two never share a payload.
+const skillTargets = SKILL_TARGETS;
+const mcpConfigTargets = MCP_CONFIG_TARGETS.map(t => t.path);
 
 function sync(canonicalPath, targets) {
   const content = readFileSync(canonicalPath);
