@@ -350,6 +350,10 @@ push and publish, and can be run from any branch.
 
    Add `~/.ssh/ripple-release.pub` under **Settings → Deploy keys** with **Allow write access**
    ticked, and the private key `~/.ssh/ripple-release` as the repository secret `RELEASE_DEPLOY_KEY`.
+   Any push made with this key bypasses **every** rule in the ruleset (PR review and the `ci-ok`
+   check included), so it is effectively an admin credential for this repo: it should live only in
+   the `RELEASE_DEPLOY_KEY` secret and never on a developer machine after setup — delete
+   `~/.ssh/ripple-release` once the secret is saved.
 2. **Branch protection** — **Settings → Rules → Rulesets → New ruleset → Import a ruleset** and
    upload `.github/rulesets/master.json`. It requires the `ci-ok` check and a pull request for
    every change to `master`, blocks force-pushes and deletion, and lists *Deploy keys* as the only
