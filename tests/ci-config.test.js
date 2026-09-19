@@ -5,7 +5,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const read = (relPath) => readFileSync(join(repoRoot, relPath), 'utf8');
+// Normalised to LF: a Windows checkout with core.autocrlf=true hands these files back CRLF.
+const read = (relPath) => readFileSync(join(repoRoot, relPath), 'utf8').replace(/\r\n/g, '\n');
 
 // The branch ruleset (.github/rulesets/master.json, imported by hand on GitHub) requires a
 // single status check by name, and that name is whatever the aggregate job in ci.yml reports.
