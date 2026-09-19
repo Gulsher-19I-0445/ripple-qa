@@ -57,6 +57,10 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
+      # prepublishOnly runs `npm test` on every publish (dry-run included), and the suite
+      # imports third-party packages, so the runner needs node_modules.
+      - run: npm ci
+
       - name: Ensure npm supports trusted publishing (>= 11.5.1)
         run: |
           npm install -g npm@11
