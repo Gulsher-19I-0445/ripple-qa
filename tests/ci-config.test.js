@@ -37,7 +37,9 @@ test('the ruleset requires exactly the check name ci.yml reports for its aggrega
 
 test('the aggregate job gates on every other job in ci.yml', () => {
   const jobsSection = ciYaml.slice(ciYaml.indexOf('\njobs:\n'));
-  const jobIds = [...jobsSection.matchAll(/^  ([a-z-]+):$/gm)].map((m) => m[1]).filter((id) => id !== 'ci-ok');
+  // GitHub job ids may contain letters, digits, `-` and `_` — match all of them so a new job
+  // like `e2e-2:` or `smoke_test:` cannot slip past the gate check below.
+  const jobIds = [...jobsSection.matchAll(/^  ([A-Za-z0-9_-]+):$/gm)].map((m) => m[1]).filter((id) => id !== 'ci-ok');
   assert.ok(jobIds.length >= 2, `expected the real jobs, got ${jobIds}`);
   const needs = ciYaml.match(/^  ci-ok:\n(?:    .*\n)*?    needs: \[(.+)\]$/m);
   assert.ok(needs, 'ci-ok must declare needs');
