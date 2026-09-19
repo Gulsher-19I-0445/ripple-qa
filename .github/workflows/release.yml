@@ -64,7 +64,13 @@ jobs:
       - name: Ensure npm supports trusted publishing (>= 11.5.1)
         run: |
           npm install -g npm@11
-          npm --version
+          v="$(npm --version)"
+          echo "npm $v"
+          # Fail loudly if npm@11 ever resolves below the trusted-publishing floor.
+          if [ "$(printf '%s\n' 11.5.1 "$v" | sort -V | head -n1)" != "11.5.1" ]; then
+            echo "::error::npm $v is too old for trusted publishing (need >= 11.5.1)"
+            exit 1
+          fi
 
       - name: Configure git identity
         run: |
