@@ -321,7 +321,54 @@ ripple analyze --ticket PROJ-1234
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feat/your-feature`
 3. Make your changes — ES modules throughout, no TypeScript, no `require()`
-4. Open a pull request
+4. Open a pull request — the **CI** workflow (`.github/workflows/ci.yml`) runs the test suite on
+   Node 20/22/24 and installs the packed tarball globally to boot the CLI and MCP server from it.
+   Branch protection on `master` requires its single aggregate check, `ci-ok`, so a PR cannot
+   merge until it is green.
+5. Run `npm test` locally before pushing — it is the same command CI runs (`node --test`)
+
+---
+
+## Releasing
+
+Releases are one click from the Actions tab: **Actions → Release → Run workflow**, pick
+`patch` / `minor` / `major`, and run it from `master`. The workflow runs the full CI gate,
+bumps `package.json`, pushes the `Release vX.Y.Z` commit and tag, publishes `ripple-qa` to npm
+via [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC — no npm token is stored
+anywhere), and creates a GitHub Release with generated notes. `dry_run=true` does everything except
+push and publish, and can be run from any branch.
+
+### One-time setup
+
+1. **Deploy key** — the ruleset that protects `master` blocks the built-in `GITHUB_TOKEN`, so the
+   workflow pushes its version commit over a write deploy key instead. Generate it **outside the
+   checkout** so the private key can never be committed:
+
+   ```bash
+   ssh-keygen -t ed25519 -N "" -C ripple-qa-release -f ~/.ssh/ripple-release
+   ```
+
+   Add `~/.ssh/ripple-release.pub` under **Settings → Deploy keys** with **Allow write access**
+   ticked, and the private key `~/.ssh/ripple-release` as the repository secret `RELEASE_DEPLOY_KEY`.
+2. **Branch protection** — **Settings → Rules → Rulesets → New ruleset → Import a ruleset** and
+   upload `.github/rulesets/master.json`. It requires the `ci-ok` check and a pull request for
+   every change to `master`, blocks force-pushes and deletion, and lists *Deploy keys* as the only
+   bypass actor.
+3. **npm trusted publisher** — on npmjs.com open `ripple-qa` → **Settings → Trusted Publisher** →
+   GitHub Actions, with owner `Gulsher-19I-0445`, repository `ripple-qa`, workflow filename
+   `release.yml`, and the **Environment field left blank** (the workflow does not use one; a
+   mismatch fails the token exchange with an unhelpful 403/404).
+
+### Good to know
+
+- Wait for a running Release to finish before dispatching another. A queued second run checks out
+  its own dispatch-time commit and will (correctly) fail when it tries to push.
+- The workflow pushes **before** it publishes, because publishing is the only irreversible step. If
+  the publish fails after the push landed, the tag is removed automatically but the version-bump
+  commit stays on `master`; fix the cause and dispatch again (that run bumps once more).
+- The provenance attestation references the commit the workflow was dispatched from (the one
+  before the version bump). That is inherent to bumping inside the workflow and is fine for
+  `npm audit signatures`.
 
 ---
 

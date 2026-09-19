@@ -2,7 +2,7 @@
   "_meta": {
     "lastAudited": "2026-09-07",
     "auditMethod": "Every claim below was checked against the source rather than carried forward. Claims that did not match the code were corrected, not deleted — see progress_logs.json entries dated 2026-09-07 with topic 'Feature-record audit' for what changed and why.",
-    "testSuite": "npm test — 65 tests, all passing as of 2026-09-08 (KAN-14)",
+    "testSuite": "npm test — 92 tests, all passing as of 2026-09-19 (CI gate + release workflow); the same command CI runs on Node 20/22/24",
     "codeReview": "Adversarial code review run 2026-09-07 found 2 blockers and 6 warnings in the v2.1 diff feature; all were fixed and covered by regression tests before this record was finalised. See progress_logs.json entries topic-prefixed \"Code review fixes\"."
   },
   "v1": {
@@ -91,6 +91,11 @@
       "gap": ".claude/commands/ripple.md is a Claude-Code-only slash command that neither sync-agents nor writeHostWiring produces",
       "detail": "Claude Code exposes the `ripple` skill as /ripple on its own, so the command file is redundant with the skill and exists only in this repo (user projects wired by `ripple init` do not get it and do not need it). Candidate for removal; left in place because that is a separate decision from the 2026-09-19 wiring fix.",
       "status": "unfixed — recorded during the 2026-09-19 architect review"
+    },
+    {
+      "gap": "mcp/src/env.js chdirs to RIPPLE_PROJECT_ROOT without checking it exists",
+      "detail": "A nonexistent RIPPLE_PROJECT_ROOT makes the server die with a raw ENOENT stack trace from process.chdir rather than a friendly error. Found while building the CI package job (which mkdir -p's the directory first). Pre-existing, out of scope for the CI work.",
+      "status": "unfixed — recorded 2026-09-19"
     }
   ],
   "planned": [
@@ -126,6 +131,17 @@
       "tests/host-wiring.test.js (9 tests): writer contract, merge/idempotence, malformed input, broken install, checkout guard, library-code no-console.log enforcement, deps probe, and an END-TO-END case that spawns the real server through the MCP SDK Client from the generated .mcp.json entry with a sentinel config error (github.owner without github.repo) that can only be reported if the server resolved the temp project — not its spawn cwd — as root. tests/host-sync.test.js (4 tests) pins the repo's committed per-host copies to their canonical sources and the committed .mcp.json to being machine-independent. Suite is 86 tests",
       "README section \"Using /ripple inside Claude Code and other agents\" with the per-host file table; CLAUDE.md structure list, Stack, Config and secrets, and Multi-host sync sections updated",
       "Command-boundary error handling: runMcpSetup and the init wiring helper wireHostsForProject() never surface a stack trace — writeHostWiring attaches err.partialResult so a failure partway through the six target files still reports which ones landed; mcpDepsResolvable refuses a stray mcp/node_modules that shadows the root install (two zod instances) with a delete-and-rerun message; the checkout guard covers subdirectories of the package (running the wizard from mcp/ is refused)"
+    ]
+  },
+  "v2.3": {
+    "status": "shipped (repo side) — one-time GitHub/npm setup pending, see README → Releasing",
+    "summary": "CI merge gate and one-click npm release. Tests must pass before anything merges to master; releases run from the Actions tab and publish to npm with provenance via trusted publishing.",
+    "features": [
+      ".github/workflows/ci.yml — pull_request/push to master + workflow_call; test matrix Node 20/22/24; `package` job installs the packed tarball globally and boots `ripple --version` and the MCP server from it; aggregate `ci-ok` job is the one check branch protection requires",
+      ".github/workflows/release.yml — workflow_dispatch with bump (patch|minor|major) and dry_run; reuses ci.yml, npm version, atomic push of commit+tag over the RELEASE_DEPLOY_KEY deploy key, npm publish via trusted publishing (OIDC), gh release create --generate-notes; tag removed automatically if publish fails after the push",
+      ".github/rulesets/master.json — importable ruleset: PR required (0 approvals), ci-ok required, no force-push/delete, Deploy keys as bypass actor",
+      "tests/ci-config.test.js — pins the ruleset's required check to ci.yml's job name, ci-ok gating on every job, OIDC-only publish (no NPM_TOKEN/NODE_AUTH_TOKEN), push-before-publish order, and that the golden fixtures stay tracked and LF",
+      "tests/fixtures/golden/ committed (was gitignored) and pinned LF via .gitattributes; `npm test` is bare `node --test`; engines.node >=20; prepublishOnly runs the suite"
     ]
   }
 }

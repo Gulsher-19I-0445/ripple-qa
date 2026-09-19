@@ -328,3 +328,60 @@ a nested-only install is still accepted because that is what the `npm install` f
 a checkout guard that only matched the package root and not its subdirectories (WR-04), and zero
 test coverage of the init branch (WR-05 — extracted to `wireHostsForProject()` and tested against
 a malformed `.mcp.json`). Suite is 86 tests after the round.
+
+## 2026-09-19 — Golden fixtures were gitignored, so a fresh clone failed 6 tests
+
+**Status:** resolved
+**Area:** `tests/fixtures/golden/`, `.gitignore`, CI
+
+**What happened.** While scoping the CI merge gate, a clone of the repo into a scratch directory
+(`npm ci && npm test` with every API env var unset) failed 80/86: all six `markdown-parity`
+tests threw `ENOENT …/tests/fixtures/golden/*.md`. The suite had only ever been green on the
+author's machine, where the files existed on disk.
+
+**Cause.** `cf15c67` (the GitHub diff feature) added `tests/fixtures/golden/` to `.gitignore`
+alongside its other gitignore cleanup. The header of `tests/fixtures/generate-golden.mjs` says the
+fixtures are a frozen pre-change baseline that must not be regenerated casually — which only makes
+sense if they are committed; ignoring them made every byte-parity test untestable anywhere else.
+
+**Fix.** Removed the ignore line and committed the five fixtures unchanged. Added `.gitattributes`
+with `tests/fixtures/golden/*.md text eol=lf` so a Windows checkout (`core.autocrlf=true` here)
+cannot CRLF-convert them and break byte-parity locally. Scoped to that directory only; README.md
+is CRLF and a repo-wide rule would churn it. `tests/ci-config.test.js` now fails if the ignore
+line ever comes back.
+
+**Related.** `"test": "node --test \"tests/**/*.test.js\""` relied on the runner's glob support,
+which only exists on Node ≥21 — the `engines: >=18` claim was never testable. Changed to bare
+`node --test` (recursive discovery on every supported version) and `engines` to `>=20`; Node 18
+has been EOL since April 2025. CI now runs the suite on 20/22/24.
+
+## 2026-09-19 — Required status checks block the release workflow's own push
+
+**Status:** resolved (by design choice)
+**Area:** `.github/workflows/release.yml`, `.github/rulesets/master.json`
+
+**What happened.** The release design bumps `package.json`, commits and tags inside the workflow,
+then pushes to `master`. A ruleset that requires the `ci-ok` check (the whole point of the CI
+gate) rejects that push when it is made with the built-in `GITHUB_TOKEN`, and the Actions identity
+cannot be added to a ruleset bypass list.
+
+**Fix.** The workflow checks out with `ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}` — a write
+deploy key scoped to this repo, which never expires — and the ruleset lists *Deploy keys* as its
+only bypass actor. Pushes over a deploy key also trigger the `push`-to-master CI run, which
+`GITHUB_TOKEN` pushes would not. The one-time setup is documented in README → Releasing.
+
+**Ordering decision.** The architect review moved the push *before* `npm publish`: publishing is
+the only irreversible step (a version number stays burned even after unpublish), so a rejected
+push must cost nothing. If publish fails after the push landed, a cleanup step deletes the tag;
+the bump commit stays and the next dispatch bumps again — documented rather than papered over.
+
+**Incidents while implementing.** A Python one-liner used to patch `tests/ci-config.test.js`
+turned the `\b` in a regex into a literal backspace byte and the `\n` in a string into a real
+newline (both invisible in the diff view). Caught by the suite; the file was repaired with the
+Edit tool and a byte-level check (`od -c`). Also: the first fresh-clone run of the new test failed
+on Windows because `core.autocrlf` checked the YAML out as CRLF — the test now normalises line
+endings before matching.
+
+**Known gap (out of scope, pre-existing).** `mcp/src/env.js` calls `process.chdir` on
+`RIPPLE_PROJECT_ROOT` without checking it exists, so a nonexistent root prints a raw stack trace
+instead of a friendly error. The CI `package` job creates the directory first.
